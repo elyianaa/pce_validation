@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCE Specifications and Validations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg: #12161B;
+    --panel: #181D24;
+    --panel-raised: #1E242C;
+    --line: #2A323C;
+    --line-soft: #232A32;
+    --text: #E7EAEE;
+    --text-dim: #8B96A3;
+    --text-faint: #5C6773;
+    --sap: #4FD8E0;
+    --sap-dim: #2C5A5E;
+    --symbio: #F2A93C;
+    --symbio-dim: #5C4A28;
+    --good: #6EE7A8;
+    --bad: #F2726D;
+    --radius: 3px;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background: var(--bg);
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .topbar{
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(18,22,27,0.85);
+    backdrop-filter: blur(6px);
+    position: sticky;
+    top:0;
+    z-index: 20;
+  }
+  .topbar-inner{
+    max-width: 1400px;
+    margin: 0 auto;
+    display:flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    margin: 0 0 6px;
+  }
+  h1{
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  .topbar-meta{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .stage{
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px;
+    display: grid;
+    grid-template-columns: 1fr 1px 1fr;
+    gap: 32px;
+  }
+  @media (max-width: 980px){
+    .stage{ grid-template-columns: 1fr; }
+    .divider{ display:none; }
+  }
+  .divider{
+    background: linear-gradient(180deg, transparent, var(--line) 10%, var(--line) 90%, transparent);
+    position: relative;
+  }
+  .panel{ display:flex; flex-direction:column; gap: 16px; min-width:0; }
+  .panel-head{ display:flex; align-items:center; justify-content:space-between; }
+  .panel-title{ display:flex; align-items:center; gap: 10px; }
+  .swatch{ width:9px; height:9px; border-radius:1px; }
+  .swatch.sap{ background: var(--sap); box-shadow: 0 0 8px var(--sap); }
+  .swatch.symbio{ background: var(--symbio); box-shadow: 0 0 8px var(--symbio); }
+  .panel-title h2{ font-size: 15px; margin:0; font-weight:600; letter-spacing:0.02em; }
+  .panel-sub{ font-family:'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.06em; text-transform:uppercase; }
+
+  textarea{
+    width:100%;
+    min-height: 190px;
+    resize: vertical;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    padding: 14px 16px;
+    outline: none;
+    transition: border-color .15s ease;
+  }
+  textarea::placeholder{ color: var(--text-faint); }
+  .panel.sap textarea:focus{ border-color: var(--sap); }
+  .panel.symbio textarea:focus{ border-color: var(--symbio); }
+
+  .row-actions{ display:flex; align-items:center; gap:10px; }
+  button{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-radius: var(--radius);
+    padding: 9px 16px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: filter .12s ease, transform .05s ease;
+  }
+  button:active{ transform: translateY(1px); }
+  .btn-primary.sap{ background: var(--sap); color: #08181A; }
+  .btn-primary.symbio{ background: var(--symbio); color: #201503; }
+  .btn-primary:hover{ filter: brightness(1.08); }
+  .btn-ghost{
+    background: transparent;
+    color: var(--text-dim);
+    border-color: var(--line);
+  }
+  .btn-ghost:hover{ color: var(--text); border-color: var(--text-faint); }
+
+  .status{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 9px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    display:none;
+    align-items:center;
+    gap:8px;
+  }
+  .status.show{ display:flex; }
+  .status.error{ border-color: var(--bad); color: var(--bad); background: rgba(242,114,109,0.08); }
+  .status.ok{ border-color: var(--good); color: var(--good); background: rgba(110,231,168,0.08); }
+  .status .dot{ width:6px; height:6px; border-radius:50%; background: currentColor; flex:none; }
+
+  .cols-box{
+    display:none;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+  .cols-box.show{ display:block; }
+  .cols-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 10px;
+  }
+  .cols-head span{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .cols-mini-actions{ display:flex; gap:6px; }
+  .cols-mini-actions button{
+    padding: 3px 9px;
+    font-size: 10.5px;
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+  }
+  .cols-mini-actions button:hover{ color: var(--text); }
+  .chips{ display:flex; flex-wrap:wrap; gap: 7px; }
+  .chip{
+    display:flex; align-items:center; gap:6px;
+    padding: 5px 10px 5px 8px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    background: var(--panel-raised);
+  }
+  .chip input{ display:none; }
+  .chip .box{
+    width: 11px; height:11px;
+    border: 1px solid var(--text-faint);
+    border-radius: 2px;
+    flex: none;
+    position: relative;
+  }
+  .chip input:checked + .box{ background: var(--text-faint); }
+  .panel.sap .chip input:checked + .box{ background: var(--sap); border-color: var(--sap); }
+  .panel.symbio .chip input:checked + .box{ background: var(--symbio); border-color: var(--symbio); }
+  .chip.active{ color: var(--text); }
+
+  .table-wrap{
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: auto;
+    max-height: 460px;
+    background: var(--panel);
+    display:none;
+  }
+  .table-wrap.show{ display:block; }
+  table{ border-collapse: collapse; width: 100%; font-size: 12px; }
+  thead th{
+    position: sticky; top:0;
+    background: var(--panel-raised);
+    text-align:left;
+    padding: 9px 12px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .panel.sap thead th{ box-shadow: inset 0 -2px 0 var(--sap-dim); }
+  .panel.symbio thead th{ box-shadow: inset 0 -2px 0 var(--symbio-dim); }
+  tbody td{
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    font-family:'IBM Plex Mono', monospace;
+    color: var(--text);
+    white-space: nowrap;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  tbody tr:hover td{ background: rgba(255,255,255,0.02); }
+  .empty-cell{ color: var(--text-faint); }
+
+  .placeholder{
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 24px;
+    text-align:center;
+    color: var(--text-faint);
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.03em;
+  }
+
+  .badge-row{ display:flex; gap:8px; flex-wrap: wrap; }
+  .badge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 3px 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div>
+      <p class="eyebrow">Validation Bench</p>
+      <h1>PCE Specifications and Validations</h1>
+    </div>
+    <div class="topbar-meta">xml &rarr; table &rarr; column select</div>
+  </div>
+</div>
+
+<div class="stage">
+
+  <!-- SAP PANEL -->
+  <section class="panel sap" id="panel-sap">
+    <div class="panel-head">
+      <div class="panel-title">
+        <span class="swatch sap"></span>
+        <h2>SAP Styles</h2>
+      </div>
+      <span class="panel-sub">source A</span>
+    </div>
+
+    <textarea id="xml-sap" placeholder="Paste SAP-style XML here..."></textarea>
+
+    <div class="row-actions">
+      <button class="btn-primary sap" data-action="convert" data-target="sap">Convert</button>
+      <button class="btn-ghost" data-action="clear" data-target="sap">Clear</button>
+      <button class="btn-ghost" data-action="csv" data-target="sap">Copy as CSV</button>
+      <button class="btn-ghost" data-action="xlsx" data-target="sap">Download XLSX</button>
+    </div>
+
+    <div class="status" id="status-sap"><span class="dot"></span><span class="msg"></span></div>
+
+    <div class="cols-box" id="cols-sap">
+      <div class="cols-head">
+        <span>Display columns</span>
+        <div class="cols-mini-actions">
+          <button data-action="all" data-target="sap">All</button>
+          <button data-action="none" data-target="sap">None</button>
+        </div>
+      </div>
+      <div class="chips" id="chips-sap"></div>
+    </div>
+
+    <div class="badge-row" id="badges-sap"></div>
+
+    <div class="table-wrap" id="table-wrap-sap">
+      <table id="table-sap"><thead></thead><tbody></tbody></table>
+    </div>
+
+    <div class="placeholder" id="placeholder-sap">table results of xml conversion will appear here</div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- SYMBIO PANEL -->
+  <section class="panel symbio" id="panel-symbio">
+    <div class="panel-head">
+      <div class="panel-title">
+        <span class="swatch symbio"></span>
+        <h2>Symbio Styles</h2>
+      </div>
+      <span class="panel-sub">source B</span>
+    </div>
+
+    <textarea id="xml-symbio" placeholder="Paste Symbio-style XML here..."></textarea>
+
+    <div class="row-actions">
+      <button class="btn-primary symbio" data-action="convert" data-target="symbio">Convert</button>
+      <button class="btn-ghost" data-action="clear" data-target="symbio">Clear</button>
+      <button class="btn-ghost" data-action="csv" data-target="symbio">Copy as CSV</button>
+      <button class="btn-ghost" data-action="xlsx" data-target="symbio">Download XLSX</button>
+    </div>
+
+    <div class="status" id="status-symbio"><span class="dot"></span><span class="msg"></span></div>
+
+    <div class="cols-box" id="cols-symbio">
+      <div class="cols-head">
+        <span>Display columns</span>
+        <div class="cols-mini-actions">
+          <button data-action="all" data-target="symbio">All</button>
+          <button data-action="none" data-target="symbio">None</button>
+        </div>
+      </div>
+      <div class="chips" id="chips-symbio"></div>
+    </div>
+
+    <div class="badge-row" id="badges-symbio"></div>
+
+    <div class="table-wrap" id="table-wrap-symbio">
+      <table id="table-symbio"><thead></thead><tbody></tbody></table>
+    </div>
+
+    <div class="placeholder" id="placeholder-symbio">table results of xml conversion will appear here</div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+
+  // ---------- Generic XML -> rows/columns engine ----------
+
+  function flattenElement(el, prefix){
+    prefix = prefix || '';
+    const obj = {};
+    for (const attr of Array.from(el.attributes || [])) {
+      obj[prefix + '@' + attr.name] = attr.value;
+    }
+    const childGroups = new Map();
+    for (const child of Array.from(el.children)) {
+      if (!childGroups.has(child.tagName)) childGroups.set(child.tagName, []);
+      childGroups.get(child.tagName).push(child);
+    }
+    for (const [tag, els] of childGroups) {
+      if (els.length === 1) {
+        const c = els[0];
+        if (c.children.length === 0) {
+          obj[prefix + tag] = c.textContent.trim();
+          for (const attr of Array.from(c.attributes || [])) {
+            obj[prefix + tag + '@' + attr.name] = attr.value;
+          }
+        } else {
+          Object.assign(obj, flattenElement(c, prefix + tag + '.'));
+        }
+      } else {
+        obj[prefix + tag] = els.map(c => c.textContent.trim()).filter(Boolean).join(' | ');
+      }
+    }
+    if (el.children.length === 0 && Object.keys(obj).length === 0) {
+      obj[prefix.replace(/\.$/, '') || el.tagName] = el.textContent.trim();
+    }
+    return obj;
+  }
+
+  function isRichElement(el){
+    // "rich" = has attributes or child elements, i.e. more than a single scalar text value.
+    return el.attributes.length > 0 || el.children.length > 0;
+  }
+
+  function findRepeatingElements(root){
+    // Group by tag name across the WHOLE document, regardless of which parent
+    // they sit under — real-world exports often repeat the same record tag
+    // (e.g. <FeatureValue>) under many different sibling branches, not just
+    // one shared parent.
+    const byTag = new Map();
+    const stack = [root];
+    while (stack.length) {
+      const el = stack.pop();
+      for (const child of Array.from(el.children)) {
+        if (!byTag.has(child.tagName)) byTag.set(child.tagName, []);
+        byTag.get(child.tagName).push(child);
+        stack.push(child);
+      }
+    }
+
+    let best = null;
+    for (const [, arr] of byTag) {
+      if (arr.length <= 1) continue;
+      if (!arr.some(isRichElement)) continue; // skip plain repeated scalar tags
+      if (!best || arr.length > best.length) best = arr;
+    }
+    if (best) return best;
+
+    // fallback: immediate children of root
+    if (root.children.length > 0) return Array.from(root.children);
+    return [root];
+  }
+
+  function getAncestorContext(rowEl, root){
+    // Walk up from the row element and pull in any Code/Name identifiers from
+    // enclosing sections (skipping plain "*List" wrapper tags) so each row can
+    // be traced back to the Feature/section it came from.
+    const ctx = {};
+    let node = rowEl.parentElement;
+    while (node && node !== root.parentElement) {
+      if (node.tagName && !/List$/i.test(node.tagName)) {
+        for (const key of ['Code', 'Name']) {
+          const child = Array.from(node.children).find(c => c.tagName === key && c.children.length === 0);
+          if (child) {
+            const colName = node.tagName + '.' + key;
+            if (!(colName in ctx)) ctx[colName] = child.textContent.trim();
+          }
+        }
+      }
+      node = node.parentElement;
+    }
+    return ctx;
+  }
+
+  function sanitizeXml(xmlString){
+    // Fix stray "&" not already part of a valid entity (&amp; &lt; &gt; &quot; &apos; &#123; &#x1F;)
+    // This is a common issue in raw exports (e.g. "PARTS & EQUIPMENT") that would
+    // otherwise make an otherwise-fine document fail strict XML parsing.
+    let fixed = xmlString.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, '&amp;');
+    return fixed;
+  }
+
+  function xmlToRows(xmlString){
+    const parser = new DOMParser();
+    let doc = parser.parseFromString(xmlString, 'application/xml');
+    let errNode = doc.querySelector('parsererror');
+    let wasSanitized = false;
+
+    if (errNode) {
+      // Retry once against a sanitized version before giving up.
+      const sanitized = sanitizeXml(xmlString);
+      if (sanitized !== xmlString) {
+        doc = parser.parseFromString(sanitized, 'application/xml');
+        errNode = doc.querySelector('parsererror');
+        wasSanitized = true;
+      }
+    }
+
+    if (errNode) {
+      throw new Error('Could not parse XML. Check the syntax and try again.');
+    }
+    const root = doc.documentElement;
+    if (!root) throw new Error('No XML content found.');
+
+    const recordEls = findRepeatingElements(root);
+    const rows = recordEls.map(el => Object.assign(getAncestorContext(el, root), flattenElement(el)));
+
+    const columns = [];
+    const seen = new Set();
+    for (const row of rows) {
+      for (const key of Object.keys(row)) {
+        if (!seen.has(key)) { seen.add(key); columns.push(key); }
+      }
+    }
+    return { rows, columns, wasSanitized };
+  }
+
+  // ---------- Panel controller ----------
+
+  function initPanel(target){
+    const state = { columns: [], rows: [], visible: new Set() };
+
+    const els = {
+      textarea: document.getElementById('xml-' + target),
+      status: document.getElementById('status-' + target),
+      colsBox: document.getElementById('cols-' + target),
+      chips: document.getElementById('chips-' + target),
+      tableWrap: document.getElementById('table-wrap-' + target),
+      table: document.getElementById('table-' + target),
+      placeholder: document.getElementById('placeholder-' + target),
+      badges: document.getElementById('badges-' + target),
+    };
+
+    function setStatus(kind, msg){
+      els.status.className = 'status show ' + kind;
+      els.status.querySelector('.msg').textContent = msg;
+    }
+    function clearStatus(){
+      els.status.className = 'status';
+    }
+
+    function renderChips(){
+      els.chips.innerHTML = '';
+      state.columns.forEach(col => {
+        const label = document.createElement('label');
+        label.className = 'chip' + (state.visible.has(col) ? ' active' : '');
+        label.innerHTML = '<input type="checkbox" ' + (state.visible.has(col) ? 'checked' : '') + '><span class="box"></span><span></span>';
+        label.querySelector('span:last-child').textContent = col;
+        const input = label.querySelector('input');
+        input.addEventListener('change', () => {
+          if (input.checked) state.visible.add(col); else state.visible.delete(col);
+          label.classList.toggle('active', input.checked);
+          renderTable();
+        });
+        els.chips.appendChild(label);
+      });
+    }
+
+    function renderTable(){
+      const activeCols = state.columns.filter(c => state.visible.has(c));
+      const thead = els.table.querySelector('thead');
+      const tbody = els.table.querySelector('tbody');
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+
+      if (activeCols.length === 0) {
+        els.tableWrap.classList.remove('show');
+        return;
+      }
+      els.tableWrap.classList.add('show');
+
+      const trh = document.createElement('tr');
+      activeCols.forEach(c => {
+        const th = document.createElement('th');
+        th.textContent = c;
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+
+      state.rows.forEach(row => {
+        const tr = document.createElement('tr');
+        activeCols.forEach(c => {
+          const td = document.createElement('td');
+          const val = row[c];
+          if (val === undefined || val === '') {
+            td.textContent = '—';
+            td.classList.add('empty-cell');
+          } else {
+            td.textContent = val;
+            td.title = val;
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderBadges(){
+      els.badges.innerHTML = '';
+      const b1 = document.createElement('span');
+      b1.className = 'badge';
+      b1.textContent = state.rows.length + ' row' + (state.rows.length === 1 ? '' : 's');
+      const b2 = document.createElement('span');
+      b2.className = 'badge';
+      b2.textContent = state.columns.length + ' column' + (state.columns.length === 1 ? '' : 's') + ' detected';
+      els.badges.appendChild(b1);
+      els.badges.appendChild(b2);
+    }
+
+    function doConvert(){
+      const xmlString = els.textarea.value.trim();
+      if (!xmlString) {
+        setStatus('error', 'Paste some XML first.');
+        return;
+      }
+      try {
+        const { rows, columns, wasSanitized } = xmlToRows(xmlString);
+        state.rows = rows;
+        state.columns = columns;
+        state.visible = new Set(columns);
+        const note = wasSanitized ? ' (auto-fixed unescaped "&" characters)' : '';
+        setStatus('ok', 'Converted — ' + rows.length + ' row(s), ' + columns.length + ' column(s) detected.' + note);
+        els.colsBox.classList.add('show');
+        els.placeholder.style.display = 'none';
+        renderChips();
+        renderTable();
+        renderBadges();
+      } catch (e) {
+        state.rows = [];
+        state.columns = [];
+        els.colsBox.classList.remove('show');
+        els.tableWrap.classList.remove('show');
+        els.badges.innerHTML = '';
+        els.placeholder.style.display = 'block';
+        setStatus('error', e.message || 'Failed to convert XML.');
+      }
+    }
+
+    function doClear(){
+      els.textarea.value = '';
+      state.rows = [];
+      state.columns = [];
+      state.visible = new Set();
+      clearStatus();
+      els.colsBox.classList.remove('show');
+      els.tableWrap.classList.remove('show');
+      els.badges.innerHTML = '';
+      els.placeholder.style.display = 'block';
+    }
+
+    function doAll(){
+      state.visible = new Set(state.columns);
+      renderChips();
+      renderTable();
+    }
+    function doNone(){
+      state.visible = new Set();
+      renderChips();
+      renderTable();
+    }
+
+    function doCsv(){
+      const activeCols = state.columns.filter(c => state.visible.has(c));
+      if (activeCols.length === 0 || state.rows.length === 0) {
+        setStatus('error', 'Nothing to copy yet — convert first.');
+        return;
+      }
+      const esc = v => {
+        const s = (v === undefined ? '' : String(v));
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      const lines = [activeCols.map(esc).join(',')];
+      state.rows.forEach(row => {
+        lines.push(activeCols.map(c => esc(row[c])).join(','));
+      });
+      const csv = lines.join('\n');
+      navigator.clipboard.writeText(csv).then(() => {
+        setStatus('ok', 'CSV copied to clipboard (' + activeCols.length + ' columns).');
+      }).catch(() => {
+        setStatus('error', 'Clipboard unavailable in this browser context.');
+      });
+    }
+
+    function doXlsx(){
+      const activeCols = state.columns.filter(c => state.visible.has(c));
+      if (activeCols.length === 0 || state.rows.length === 0) {
+        setStatus('error', 'Nothing to export yet — convert first.');
+        return;
+      }
+      if (typeof XLSX === 'undefined') {
+        setStatus('error', 'XLSX library failed to load — check your internet connection.');
+        return;
+      }
+      const aoa = [activeCols];
+      state.rows.forEach(row => {
+        aoa.push(activeCols.map(c => (row[c] === undefined ? '' : row[c])));
+      });
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = activeCols.map(c => ({ wch: Math.min(Math.max(c.length, 12), 40) }));
+      const wb = XLSX.utils.book_new();
+      const sheetName = target === 'sap' ? 'SAP Styles' : 'Symbio Styles';
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const filename = (target === 'sap' ? 'sap_styles' : 'symbio_styles') + '_' + stamp + '.xlsx';
+      XLSX.writeFile(wb, filename);
+      setStatus('ok', 'Downloaded ' + filename + ' (' + activeCols.length + ' columns, ' + state.rows.length + ' rows).');
+    }
+
+    return { doConvert, doClear, doAll, doNone, doCsv, doXlsx };
+  }
+
+  const controllers = {
+    sap: initPanel('sap'),
+    symbio: initPanel('symbio'),
+  };
+
+  document.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.getAttribute('data-action');
+      const target = btn.getAttribute('data-target');
+      if (!target || !controllers[target]) return;
+      if (action === 'convert') controllers[target].doConvert();
+      if (action === 'clear') controllers[target].doClear();
+      if (action === 'all') controllers[target].doAll();
+      if (action === 'none') controllers[target].doNone();
+      if (action === 'csv') controllers[target].doCsv();
+      if (action === 'xlsx') controllers[target].doXlsx();
+    });
+  });
+
+})();
+</script>
+
+</body>
+</html>
