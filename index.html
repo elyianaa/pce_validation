@@ -275,7 +275,10 @@
   .badge.strong{ color: var(--text); border-color: var(--text-faint); }
   .badge.good{ color: var(--good); border-color: var(--good); }
   .badge.bad{ color: var(--bad); border-color: var(--bad); }
-  .badge.warn{ color: var(--symbio); border-color: var(--symbio); }
+  .badge.warn{ color: var(--symbio); border-color: var(--symbio);}
+  .badge.clickable{ cursor: pointer; user-select: none; transition: background .1s ease; }
+  .badge.clickable:hover{ background: rgba(255,255,255,0.05); }
+  .badge.active{ background: rgba(255,255,255,0.09); box-shadow: inset 0 0 0 1px currentColor; }
 
   /* ---- Validation section ---- */
   .validate-stage{ max-width:1400px; margin: 0 auto; padding: 0 32px 32px; }
@@ -1123,6 +1126,7 @@
     xlsxBtn: document.getElementById('download-validate-xlsx'),
   };
   let lastValidation = null; // { rows, priceRow }
+  let statusFilter = null; // null = show all; else 'Match' | 'Mismatch' | 'Missing'
 
   function vSetStatus(kind, msg){
     vEls.status.className = 'status show ' + kind;
@@ -1135,12 +1139,19 @@
     return 'stat-missing';
   }
 
+  function matchesStatusFilter(row){
+    if (!statusFilter) return true;
+    if (statusFilter === 'Missing') return row.status === 'Missing in SAP' || row.status === 'Missing in Symbio';
+    return row.status === statusFilter;
+  }
+
   function renderValidationTable(allRows){
     const thead = vEls.table.querySelector('thead');
     const tbody = vEls.table.querySelector('tbody');
     thead.innerHTML = '<tr><th>Category</th><th>Code</th><th>Name</th><th>Status</th><th>Details</th></tr>';
     tbody.innerHTML = '';
-    allRows.forEach(row => {
+    const rows = allRows.filter(matchesStatusFilter);
+    rows.forEach(row => {
       const tr = document.createElement('tr');
       const tdCategory = document.createElement('td'); tdCategory.textContent = row.category || '';
       const tdCode = document.createElement('td'); tdCode.textContent = row.code;
@@ -1161,11 +1172,21 @@
     const counts = { Match: 0, Mismatch: 0, 'Missing in SAP': 0, 'Missing in Symbio': 0 };
     allRows.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
     vEls.badges.innerHTML = '';
-    const make = (text, cls) => { const b = document.createElement('span'); b.className = 'badge ' + cls; b.textContent = text; vEls.badges.appendChild(b); };
-    make(allRows.length + ' compared', 'strong');
-    make(counts.Match + ' match', 'good');
-    make(counts.Mismatch + ' mismatch', 'warn');
-    make((counts['Missing in SAP'] + counts['Missing in Symbio']) + ' missing', 'bad');
+    const make = (text, cls, filterValue) => {
+      const b = document.createElement('span');
+      b.className = 'badge ' + cls + ' clickable' + (statusFilter === filterValue ? ' active' : '');
+      b.textContent = text;
+      b.addEventListener('click', () => {
+        statusFilter = (statusFilter === filterValue) ? null : filterValue;
+        renderValidationBadges(allRows);
+        renderValidationTable(allRows);
+      });
+      vEls.badges.appendChild(b);
+    };
+    make(allRows.length + ' compared', 'strong', null);
+    make(counts.Match + ' match', 'good', 'Match');
+    make(counts.Mismatch + ' mismatch', 'warn', 'Mismatch');
+    make((counts['Missing in SAP'] + counts['Missing in Symbio']) + ' missing', 'bad', 'Missing');
   }
 
   function runValidation(){
@@ -1190,6 +1211,7 @@
     const allRows = priceRow ? [priceRow, ...rows] : rows;
 
     lastValidation = { rows: allRows };
+    statusFilter = null;
     renderValidationBadges(allRows);
     renderValidationTable(allRows);
     vEls.placeholder.style.display = 'none';
@@ -1206,6 +1228,7 @@
       return;
     }
     const header = ['Category', 'Code', 'Name', 'Status', 'Details'];
+    const exportRows = lastValidation.rows.filter(matchesStatusFilter);
     const aoa = [header, ...lastValidation.rows.map(r => [r.category || '', r.code, r.name, r.status, r.details])];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [{ wch: 14 }, { wch: 22 }, { wch: 28 }, { wch: 18 }, { wch: 70 }];
