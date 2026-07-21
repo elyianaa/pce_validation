@@ -275,7 +275,7 @@
   .badge.strong{ color: var(--text); border-color: var(--text-faint); }
   .badge.good{ color: var(--good); border-color: var(--good); }
   .badge.bad{ color: var(--bad); border-color: var(--bad); }
-  .badge.warn{ color: var(--symbio); border-color: var(--symbio);}
+  .badge.warn{ color: var(--symbio); border-color: var(--symbio); }
   .badge.clickable{ cursor: pointer; user-select: none; transition: background .1s ease; }
   .badge.clickable:hover{ background: rgba(255,255,255,0.05); }
   .badge.active{ background: rgba(255,255,255,0.09); box-shadow: inset 0 0 0 1px currentColor; }
@@ -309,6 +309,20 @@
   }
   .tolerance-field input:focus{ border-color: var(--validate); }
   .btn-primary.validate{ background: var(--validate); color: #16101F; }
+  #validate-meta{
+    display: flex;
+    align-items: center;
+    width: fit-content;
+    margin-top: 8px;
+    padding: 9px 14px;
+    border-radius: var(--radius);
+    border: 1px solid #5B9DF2;
+    background: rgba(91,157,242,0.1);
+    color: #7FB3FF;
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
   .stat-match{ color: var(--good); font-weight: 600; }
   .stat-mismatch{ color: var(--symbio); font-weight: 600; }
   .stat-missing{ color: var(--bad); font-weight: 600; }
@@ -337,6 +351,24 @@
   }
   .zoom-btn:hover{ border-color: var(--text-faint); }
   .zoom-level{ min-width: 36px; text-align: center; }
+
+  .tabs{ display:flex; gap: 8px; margin-top: 4px; }
+  .tab-btn{
+    padding: 8px 16px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .tab-btn:hover{ color: var(--text); border-color: var(--text-faint); }
+  .tab-btn.active{ color: var(--text); border-color: var(--validate); background: rgba(177,140,242,0.1); }
+  .tab-panel{ display: none; flex-direction: column; gap: 16px; }
+  .tab-panel.active{ display: flex; }
 </style>
 </head>
 <body>
@@ -468,22 +500,48 @@
       </div>
     </div>
     <span class="panel-sub">source of truth: SAP</span>
+    <span class="panel-sub" id="validate-meta"></span>
 
     <div class="status" id="status-validate"><span class="dot"></span><span class="msg"></span></div>
 
-    <div class="badge-row" id="badges-validate"></div>
-
-    <div class="zoom-control" data-zoom-target="validate">
-      <span class="zoom-label">Zoom</span>
-      <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate">−</button>
-      <span class="zoom-level" id="zoom-level-validate">100%</span>
-      <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate">+</button>
-    </div>
-    <div class="table-wrap" id="table-wrap-validate">
-      <table id="table-validate"><thead></thead><tbody></tbody></table>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab-btn="main">Features &amp; Finishes</button>
+      <button class="tab-btn" data-tab-btn="charges">Upcharges</button>
     </div>
 
-    <div class="placeholder" id="placeholder-validate">convert both SAP and Symbio XML above, then run validation to see features, finish groups, and finishes match / mismatch results</div>
+    <!-- TAB: Features, Finish Groups, Finish -->
+    <div class="tab-panel active" data-tab-panel="main">
+      <div class="badge-row" id="badges-validate"></div>
+
+      <div class="zoom-control" data-zoom-target="validate">
+        <span class="zoom-label">Zoom</span>
+        <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate">−</button>
+        <span class="zoom-level" id="zoom-level-validate">100%</span>
+        <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate">+</button>
+      </div>
+      <div class="table-wrap" id="table-wrap-validate">
+        <table id="table-validate"><thead></thead><tbody></tbody></table>
+      </div>
+
+      <div class="placeholder" id="placeholder-validate">convert both SAP and Symbio XML above, then run validation to see features, finish groups, and finishes match / mismatch results</div>
+    </div>
+
+    <!-- TAB: Upcharges + List Price -->
+    <div class="tab-panel" data-tab-panel="charges">
+      <div class="badge-row" id="badges-validate-charges"></div>
+
+      <div class="zoom-control" data-zoom-target="validate-charges">
+        <span class="zoom-label">Zoom</span>
+        <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate-charges">−</button>
+        <span class="zoom-level" id="zoom-level-validate-charges">100%</span>
+        <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate-charges">+</button>
+      </div>
+      <div class="table-wrap" id="table-wrap-validate-charges">
+        <table id="table-validate-charges"><thead></thead><tbody></tbody></table>
+      </div>
+
+      <div class="placeholder" id="placeholder-validate-charges">run validation to see List Price and per-finish upcharge match / mismatch results (only finishes with a &lt;Charge&gt; block will appear here)</div>
+    </div>
   </section>
 </div>
 
@@ -657,6 +715,23 @@
     return (s === undefined || s === null) ? '' : String(s).trim().toUpperCase();
   }
 
+  function fuzzyNameMatch(a, b){
+    // Symbio names are often simplified versions of SAP names — e.g.
+    // "BALTIC 4773" -> "Baltic", "NICKEL METALLIC (TRANS)" -> "Nickel Metallic",
+    // "MILK SMOOTH" -> "Milk". Strip parenthetical notes and trailing numeric
+    // codes, then treat one being a leading substring of the other as a match.
+    const clean = s => normText(s)
+      .replace(/\([^)]*\)/g, '')
+      .replace(/\b\d{2,}\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const ca = clean(a);
+    const cb = clean(b);
+    if (ca === cb) return true;
+    if (ca && cb && (ca.indexOf(cb) === 0 || cb.indexOf(ca) === 0)) return true;
+    return false;
+  }
+
   function collectAllFeatures(root){
     // Every <Feature> anywhere in the document, regardless of nesting depth —
     // handles both SAP's nested-per-group style and Symbio's flat style.
@@ -672,8 +747,28 @@
     return out;
   }
 
+  function parseCharge(fv){
+    // Optional per-finish upcharge block: <Charge><Code/><Base/><Total/></Charge>.
+    // Not every export has this — only extract it when present.
+    const chargeEl = Array.from(fv.children).find(c => c.tagName === 'Charge');
+    if (!chargeEl) return null;
+    const parseNum = t => (t === undefined ? undefined : parseFloat(t));
+    return {
+      code: childText(chargeEl, 'Code'),
+      base: parseNum(childText(chargeEl, 'Base')),
+      total: parseNum(childText(chargeEl, 'Total')),
+    };
+  }
+
   function parseSpecification(xmlString){
     const { root } = parseXmlDocument(xmlString);
+
+    const headerEl = Array.from(root.children).find(c => c.tagName === 'Header');
+    const header = headerEl ? {
+      priceList: childText(headerEl, 'PriceList'),
+      currency: childText(headerEl, 'Currency'),
+      language: childText(headerEl, 'Language'),
+    } : {};
 
     const productEl = Array.from(root.children).find(c => c.tagName === 'Product');
     const product = productEl ? {
@@ -712,14 +807,15 @@
           // directly under a Feature whose own Code IS the group.
           const explicitGroup = childText(fv, 'FinishGroupFeatureValueCode');
           const groupCode = explicitGroup || code || '';
-          colorEntries.push({ groupCode, value, name: cname, sourceFeatureCode: code || '', sourceFeatureName: name || '' });
+          const charge = parseCharge(fv);
+          colorEntries.push({ groupCode, value, name: cname, sourceFeatureCode: code || '', sourceFeatureName: name || '', charge, hasExplicitGroup: !!explicitGroup });
         });
       } else if (code) {
         plainFeatures.push({ code, name, mode, required: f.getAttribute('Required') || '', options: parseOptions(f) });
       }
     }
 
-    return { product, plainFeatures, finishGroups, colorEntries };
+    return { product, header, plainFeatures, finishGroups, colorEntries };
   }
 
   function diffPlainFeatures(sapFeatures, symbioFeatures){
@@ -745,7 +841,7 @@
       }
 
       const issues = [];
-      if (normText(sap.name) !== normText(sym.name)) {
+      if (!fuzzyNameMatch(sap.name, sym.name)) {
         issues.push('Name differs: SAP "' + sap.name + '" vs Symbio "' + sym.name + '"');
       }
       if (normText(sap.mode) !== normText(sym.mode)) {
@@ -808,7 +904,7 @@
         rows.push({ category: 'Finish Group', code: sym.value, name: sym.name, status: 'Missing in SAP', details: 'Finish group exists in Symbio but not in SAP.' });
         continue;
       }
-      const nameDiffers = normText(sap.name) !== normText(sym.name);
+      const nameDiffers = !fuzzyNameMatch(sap.name, sym.name);
       rows.push({
         category: 'Finish Group',
         code: sap.value,
@@ -823,6 +919,16 @@
   function featureLabel(entry){
     if (!entry) return '';
     return entry.sourceFeatureCode + (entry.sourceFeatureName ? ' ' + entry.sourceFeatureName : '');
+  }
+
+  function fmtAmt(v){
+    return v === undefined ? 'n/a' : v.toFixed(2);
+  }
+
+  function amountsDiffer(a, b, tolerance){
+    if (a === undefined && b === undefined) return false;
+    if (a === undefined || b === undefined) return true;
+    return Math.abs(a - b) > tolerance;
   }
 
   function diffColorEntries(sapColors, symbioColors){
@@ -846,10 +952,10 @@
         continue;
       }
       const issues = [];
-      if (normText(sap.name) !== normText(sym.name)) {
+      if (!fuzzyNameMatch(sap.name, sym.name)) {
         issues.push('Name differs: SAP "' + sap.name + '" vs Symbio "' + sym.name + '"');
       }
-      if (normCode(sap.groupCode) !== normCode(sym.groupCode)) {
+      if (sym.hasExplicitGroup && normCode(sap.groupCode) !== normCode(sym.groupCode)) {
         issues.push('Assigned to different finish group: SAP "' + sap.groupCode + '" vs Symbio "' + sym.groupCode + '"');
       }
       const featureNote = 'Feature: SAP ' + featureLabel(sap) + ' | Symbio ' + featureLabel(sym) + '.';
@@ -864,6 +970,57 @@
     return rows;
   }
 
+  function formatCharge(charge){
+    if (!charge) return 'n/a';
+    const parts = [];
+    if (charge.base !== undefined) parts.push('Base ' + charge.base.toFixed(2));
+    if (charge.total !== undefined && charge.total !== charge.base) parts.push('Total ' + charge.total.toFixed(2));
+    return parts.length ? parts.join(' / ') : 'n/a';
+  }
+
+  function diffCharges(sapColors, symbioColors, priceTolerance){
+    // Separate table for the Upcharges tab: Charge Code | Description | SAP | Symbio | Status | Details.
+    // Only produced for finishes that exist on both sides AND have a <Charge> block on at least one side.
+    const sapMap = new Map(sapColors.map(c => [normCode(c.value), c]));
+    const symbioMap = new Map(symbioColors.map(c => [normCode(c.value), c]));
+    const allKeys = [];
+    const seen = new Set();
+    for (const c of sapColors) { const k = normCode(c.value); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
+    for (const c of symbioColors) { const k = normCode(c.value); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
+
+    const rows = [];
+    for (const key of allKeys) {
+      const sap = sapMap.get(key);
+      const sym = symbioMap.get(key);
+      if (!sap || !sym) continue;
+      if (!sap.charge && !sym.charge) continue;
+
+      const sapCharge = sap.charge || null;
+      const symCharge = sym.charge || null;
+      const chargeCode = (sapCharge && sapCharge.code) || (symCharge && symCharge.code) || sap.value;
+      const description = sap.name || sym.name || '';
+
+      const issues = [];
+      if (!sapCharge) issues.push('No upcharge on SAP side');
+      if (!symCharge) issues.push('No upcharge on Symbio side');
+      if (sapCharge && symCharge) {
+        if (normText(sapCharge.code) !== normText(symCharge.code)) issues.push('Charge code differs: SAP "' + (sapCharge.code || 'n/a') + '" vs Symbio "' + (symCharge.code || 'n/a') + '"');
+        if (amountsDiffer(sapCharge.base, symCharge.base, priceTolerance)) issues.push('Base differs: SAP ' + fmtAmt(sapCharge.base) + ' vs Symbio ' + fmtAmt(symCharge.base));
+        if (amountsDiffer(sapCharge.total, symCharge.total, priceTolerance)) issues.push('Total differs: SAP ' + fmtAmt(sapCharge.total) + ' vs Symbio ' + fmtAmt(symCharge.total));
+      }
+
+      rows.push({
+        chargeCode: chargeCode,
+        description: description,
+        sapValue: formatCharge(sapCharge),
+        symbioValue: formatCharge(symCharge),
+        status: issues.length ? 'Mismatch' : 'Match',
+        details: 'Finish ' + sap.value + ' (' + description + ') — Feature: SAP ' + featureLabel(sap) + ' | Symbio ' + featureLabel(sym) + '.' + (issues.length ? ' ' + issues.join('; ') + '.' : ''),
+      });
+    }
+    return rows;
+  }
+
   function diffSpecifications(sapSpec, symbioSpec, priceTolerance){
     const rows = [
       ...diffPlainFeatures(sapSpec.plainFeatures, symbioSpec.plainFeatures),
@@ -871,8 +1028,9 @@
       ...diffColorEntries(sapSpec.colorEntries, symbioSpec.colorEntries),
     ];
 
-    // Pricing comparison (Product level)
-    let priceRow = null;
+    const chargeRows = diffCharges(sapSpec.colorEntries, symbioSpec.colorEntries, priceTolerance);
+
+    // List Price comparison now lives in the Upcharges tab too — same shape as chargeRows.
     if (sapSpec.product.listPrice !== undefined || symbioSpec.product.listPrice !== undefined) {
       const sapPrice = sapSpec.product.listPrice;
       const symPrice = symbioSpec.product.listPrice;
@@ -882,15 +1040,22 @@
         details = 'Price missing on one side — SAP: ' + (sapPrice === undefined ? 'n/a' : sapPrice) + ', Symbio: ' + (symPrice === undefined ? 'n/a' : symPrice);
       } else if (Math.abs(sapPrice - symPrice) <= priceTolerance) {
         status = 'Match';
-        details = 'SAP: ' + sapPrice.toFixed(2) + ' vs Symbio: ' + symPrice.toFixed(2);
+        details = 'Product list price.';
       } else {
         status = 'Mismatch';
-        details = 'SAP: ' + sapPrice.toFixed(2) + ' vs Symbio: ' + symPrice.toFixed(2) + ' (diff ' + Math.abs(sapPrice - symPrice).toFixed(2) + ')';
+        details = 'Product list price differs by ' + Math.abs(sapPrice - symPrice).toFixed(2) + '.';
       }
-      priceRow = { category: 'Pricing', code: 'PRODUCT.LIST_PRICE', name: 'List Price', status, details };
+      chargeRows.unshift({
+        chargeCode: 'LIST_PRICE',
+        description: 'List Price',
+        sapValue: sapPrice !== undefined ? sapPrice.toFixed(2) : 'n/a',
+        symbioValue: symPrice !== undefined ? symPrice.toFixed(2) : 'n/a',
+        status,
+        details,
+      });
     }
 
-    return { rows, priceRow };
+    return { rows, chargeRows };
   }
 
   // ---------- Panel controller ----------
@@ -1117,6 +1282,7 @@
 
   const vEls = {
     status: document.getElementById('status-validate'),
+    meta: document.getElementById('validate-meta'),
     badges: document.getElementById('badges-validate'),
     tableWrap: document.getElementById('table-wrap-validate'),
     table: document.getElementById('table-validate'),
@@ -1124,9 +1290,14 @@
     tolerance: document.getElementById('price-tolerance'),
     runBtn: document.getElementById('run-validate'),
     xlsxBtn: document.getElementById('download-validate-xlsx'),
+    badgesCharges: document.getElementById('badges-validate-charges'),
+    tableWrapCharges: document.getElementById('table-wrap-validate-charges'),
+    tableCharges: document.getElementById('table-validate-charges'),
+    placeholderCharges: document.getElementById('placeholder-validate-charges'),
   };
-  let lastValidation = null; // { rows, priceRow }
+  let lastValidation = null; // { rows, chargeRows }
   let statusFilter = null; // null = show all; else 'Match' | 'Mismatch' | 'Missing'
+  let chargeStatusFilter = null; // null = show all; else 'Match' | 'Mismatch'
 
   function vSetStatus(kind, msg){
     vEls.status.className = 'status show ' + kind;
@@ -1143,6 +1314,25 @@
     if (!statusFilter) return true;
     if (statusFilter === 'Missing') return row.status === 'Missing in SAP' || row.status === 'Missing in Symbio';
     return row.status === statusFilter;
+  }
+
+  function matchesChargeStatusFilter(row){
+    if (!chargeStatusFilter) return true;
+    return row.status === chargeStatusFilter;
+  }
+
+  function renderValidationMeta(sapSpec, symbioSpec){
+    if (!vEls.meta) return;
+    const sapStyle = sapSpec.product.code || 'n/a';
+    const symStyle = symbioSpec.product.code || 'n/a';
+    const sapPriceList = sapSpec.header.priceList || 'n/a';
+    const symPriceList = symbioSpec.header.priceList || 'n/a';
+
+    let text = 'Style: ' + sapStyle;
+    if (normText(sapStyle) !== normText(symStyle)) text += ' (Symbio: ' + symStyle + ')';
+    text += '  |  Price List: ' + sapPriceList;
+    if (normText(sapPriceList) !== normText(symPriceList)) text += ' (Symbio: ' + symPriceList + ')';
+    vEls.meta.textContent = text;
   }
 
   function renderValidationTable(allRows){
@@ -1189,6 +1379,51 @@
     make((counts['Missing in SAP'] + counts['Missing in Symbio']) + ' missing', 'bad', 'Missing');
   }
 
+  function renderChargeTable(chargeRows){
+    const thead = vEls.tableCharges.querySelector('thead');
+    const tbody = vEls.tableCharges.querySelector('tbody');
+    thead.innerHTML = '<tr><th>Charge Code</th><th>Description</th><th>SAP</th><th>Symbio</th><th>Status</th><th>Details</th></tr>';
+    tbody.innerHTML = '';
+    const rows = chargeRows.filter(matchesChargeStatusFilter);
+    rows.forEach(row => {
+      const tr = document.createElement('tr');
+      const tdCode = document.createElement('td'); tdCode.textContent = row.chargeCode;
+      const tdDesc = document.createElement('td'); tdDesc.textContent = row.description;
+      const tdSap = document.createElement('td'); tdSap.textContent = row.sapValue;
+      const tdSym = document.createElement('td'); tdSym.textContent = row.symbioValue;
+      const tdStatus = document.createElement('td');
+      tdStatus.textContent = row.status;
+      tdStatus.className = statusClass(row.status);
+      const tdDetails = document.createElement('td');
+      tdDetails.textContent = row.details;
+      tdDetails.className = 'details-cell';
+      tr.appendChild(tdCode); tr.appendChild(tdDesc); tr.appendChild(tdSap); tr.appendChild(tdSym); tr.appendChild(tdStatus); tr.appendChild(tdDetails);
+      tbody.appendChild(tr);
+    });
+    vEls.tableWrapCharges.classList.add('show');
+    if (chargeRows.length) vEls.placeholderCharges.style.display = 'none';
+  }
+
+  function renderChargeBadges(chargeRows){
+    const counts = { Match: 0, Mismatch: 0 };
+    chargeRows.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
+    vEls.badgesCharges.innerHTML = '';
+    const make = (text, cls, filterValue) => {
+      const b = document.createElement('span');
+      b.className = 'badge ' + cls + ' clickable' + (chargeStatusFilter === filterValue ? ' active' : '');
+      b.textContent = text;
+      b.addEventListener('click', () => {
+        chargeStatusFilter = (chargeStatusFilter === filterValue) ? null : filterValue;
+        renderChargeBadges(chargeRows);
+        renderChargeTable(chargeRows);
+      });
+      vEls.badgesCharges.appendChild(b);
+    };
+    make(chargeRows.length + ' compared', 'strong', null);
+    make(counts.Match + ' match', 'good', 'Match');
+    make(counts.Mismatch + ' mismatch', 'warn', 'Mismatch');
+  }
+
   function runValidation(){
     const sapState = controllers.sap.state;
     const symbioState = controllers.symbio.state;
@@ -1207,19 +1442,23 @@
     const tolerance = parseFloat(vEls.tolerance.value);
     const priceTolerance = isNaN(tolerance) ? 0 : tolerance;
 
-    const { rows, priceRow } = diffSpecifications(sapState.spec, symbioState.spec, priceTolerance);
-    const allRows = priceRow ? [priceRow, ...rows] : rows;
+    const { rows, chargeRows } = diffSpecifications(sapState.spec, symbioState.spec, priceTolerance);
 
-    lastValidation = { rows: allRows };
+    lastValidation = { rows, chargeRows };
     statusFilter = null;
-    renderValidationBadges(allRows);
-    renderValidationTable(allRows);
+    chargeStatusFilter = null;
+    renderValidationMeta(sapState.spec, symbioState.spec);
+    renderValidationBadges(rows);
+    renderValidationTable(rows);
     vEls.placeholder.style.display = 'none';
-    vSetStatus('ok', 'Validation complete — ' + rows.length + ' feature(s) compared.');
+    renderChargeBadges(chargeRows);
+    renderChargeTable(chargeRows);
+    if (!chargeRows.length) vEls.placeholderCharges.style.display = 'block';
+    vSetStatus('ok', 'Validation complete — ' + rows.length + ' feature(s) and ' + chargeRows.length + ' charge/price item(s) compared.');
   }
 
   function downloadValidationXlsx(){
-    if (!lastValidation || !lastValidation.rows.length) {
+    if (!lastValidation || (!lastValidation.rows.length && !lastValidation.chargeRows.length)) {
       vSetStatus('error', 'Run validation first.');
       return;
     }
@@ -1227,13 +1466,22 @@
       vSetStatus('error', 'XLSX library failed to load — check your internet connection.');
       return;
     }
-    const header = ['Category', 'Code', 'Name', 'Status', 'Details'];
-    const exportRows = lastValidation.rows.filter(matchesStatusFilter);
-    const aoa = [header, ...lastValidation.rows.map(r => [r.category || '', r.code, r.name, r.status, r.details])];
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 14 }, { wch: 22 }, { wch: 28 }, { wch: 18 }, { wch: 70 }];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'SAP vs Symbio');
+
+    const mainHeader = ['Category', 'Code', 'Name', 'Status', 'Details'];
+    const mainRows = lastValidation.rows.filter(matchesStatusFilter);
+    const mainAoa = [mainHeader, ...mainRows.map(r => [r.category || '', r.code, r.name, r.status, r.details])];
+    const wsMain = XLSX.utils.aoa_to_sheet(mainAoa);
+    wsMain['!cols'] = [{ wch: 14 }, { wch: 22 }, { wch: 28 }, { wch: 18 }, { wch: 70 }];
+    XLSX.utils.book_append_sheet(wb, wsMain, 'SAP vs Symbio');
+
+    const chargeHeader = ['Charge Code', 'Description', 'SAP', 'Symbio', 'Status', 'Details'];
+    const chargeRowsOut = lastValidation.chargeRows.filter(matchesChargeStatusFilter);
+    const chargeAoa = [chargeHeader, ...chargeRowsOut.map(r => [r.chargeCode, r.description, r.sapValue, r.symbioValue, r.status, r.details])];
+    const wsCharges = XLSX.utils.aoa_to_sheet(chargeAoa);
+    wsCharges['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 70 }];
+    XLSX.utils.book_append_sheet(wb, wsCharges, 'Upcharges');
+
     const stamp = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, 'sap_vs_symbio_validation_' + stamp + '.xlsx');
     vSetStatus('ok', 'Validation report downloaded.');
@@ -1242,9 +1490,19 @@
   vEls.runBtn.addEventListener('click', runValidation);
   vEls.xlsxBtn.addEventListener('click', downloadValidationXlsx);
 
+  // ---------- Validation tab switching ----------
+
+  document.querySelectorAll('[data-tab-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.getAttribute('data-tab-btn');
+      document.querySelectorAll('[data-tab-btn]').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('[data-tab-panel]').forEach(p => p.classList.toggle('active', p.getAttribute('data-tab-panel') === tab));
+    });
+  });
+
   // ---------- Table zoom controls ----------
 
-  const zoomLevels = { sap: 1, symbio: 1, validate: 1 };
+  const zoomLevels = { sap: 1, symbio: 1, validate: 1, 'validate-charges': 1 };
   const ZOOM_MIN = 0.6;
   const ZOOM_MAX = 2.0;
   const ZOOM_STEP = 0.1;
