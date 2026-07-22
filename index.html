@@ -496,6 +496,7 @@
           <input type="number" id="price-tolerance" value="0.01" min="0" step="0.01">
         </label>
         <button class="btn-primary validate" id="run-validate">Run Validation</button>
+        <button class="btn-ghost" id="reset-validate">Reset</button>
         <button class="btn-ghost" id="download-validate-xlsx">Download Report XLSX</button>
       </div>
     </div>
@@ -1289,6 +1290,7 @@
     placeholder: document.getElementById('placeholder-validate'),
     tolerance: document.getElementById('price-tolerance'),
     runBtn: document.getElementById('run-validate'),
+    resetBtn: document.getElementById('reset-validate'),
     xlsxBtn: document.getElementById('download-validate-xlsx'),
     badgesCharges: document.getElementById('badges-validate-charges'),
     tableWrapCharges: document.getElementById('table-wrap-validate-charges'),
@@ -1432,6 +1434,12 @@
       vSetStatus('error', 'Convert both SAP and Symbio XML first (structural parse not available yet).');
       return;
     }
+    const sapStyleCode = normCode(sapState.spec.product.code);
+    const symbioStyleCode = normCode(symbioState.spec.product.code);
+    if (sapStyleCode && symbioStyleCode && sapStyleCode !== symbioStyleCode) {
+      vSetStatus('error', 'Please ensure both XML are from the same style.');
+      return;
+    }
     const sapHasData = sapState.spec.plainFeatures.length || sapState.spec.finishGroups.length || sapState.spec.colorEntries.length;
     const symbioHasData = symbioState.spec.plainFeatures.length || symbioState.spec.finishGroups.length || symbioState.spec.colorEntries.length;
     if (!sapHasData && !symbioHasData) {
@@ -1487,7 +1495,32 @@
     vSetStatus('ok', 'Validation report downloaded.');
   }
 
+  function resetValidation(){
+    controllers.sap.doClear();
+    controllers.symbio.doClear();
+
+    lastValidation = null;
+    statusFilter = null;
+    chargeStatusFilter = null;
+
+    vEls.meta.textContent = '';
+    vEls.badges.innerHTML = '';
+    vEls.table.querySelector('thead').innerHTML = '';
+    vEls.table.querySelector('tbody').innerHTML = '';
+    vEls.tableWrap.classList.remove('show');
+    vEls.placeholder.style.display = 'block';
+
+    vEls.badgesCharges.innerHTML = '';
+    vEls.tableCharges.querySelector('thead').innerHTML = '';
+    vEls.tableCharges.querySelector('tbody').innerHTML = '';
+    vEls.tableWrapCharges.classList.remove('show');
+    vEls.placeholderCharges.style.display = 'block';
+
+    vEls.status.className = 'status';
+  }
+
   vEls.runBtn.addEventListener('click', runValidation);
+  vEls.resetBtn.addEventListener('click', resetValidation);
   vEls.xlsxBtn.addEventListener('click', downloadValidationXlsx);
 
   // ---------- Validation tab switching ----------
