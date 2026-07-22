@@ -172,6 +172,7 @@
     display:flex; align-items:center; justify-content:space-between;
     margin-bottom: 10px;
   }
+  .cols-head-left{ display:flex; align-items:center; }
   .cols-head span{
     font-family:'IBM Plex Mono', monospace;
     font-size: 10.5px;
@@ -179,6 +180,42 @@
     text-transform: uppercase;
     color: var(--text-faint);
   }
+  .cols-collapse-btn{
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    margin-right: 8px;
+    flex: none;
+  }
+  .cols-collapse-btn:hover{ color: var(--text); border-color: var(--text-faint); }
+  .cols-box.collapsed .chips{ display: none; }
+  .table-controls-row{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .table-controls-right{ display: flex; align-items: center; gap: 12px; }
+  .collapse-table-btn{
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    background: var(--panel-raised);
+    color: var(--text-dim);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+  }
+  .collapse-table-btn:hover{ color: var(--text); border-color: var(--text-faint); }
   .cols-mini-actions{ display:flex; gap:6px; }
   .cols-mini-actions button{
     padding: 3px 9px;
@@ -408,7 +445,10 @@
 
     <div class="cols-box" id="cols-sap">
       <div class="cols-head">
-        <span>Display columns</span>
+        <div class="cols-head-left">
+          <button class="cols-collapse-btn" data-cols-collapse="sap">−</button>
+          <span>Display columns</span>
+        </div>
         <div class="cols-mini-actions">
           <button data-action="all" data-target="sap">All</button>
           <button data-action="none" data-target="sap">None</button>
@@ -417,13 +457,17 @@
       <div class="chips" id="chips-sap"></div>
     </div>
 
-    <div class="badge-row" id="badges-sap"></div>
-
-    <div class="zoom-control" data-zoom-target="sap">
-      <span class="zoom-label">Zoom</span>
-      <button class="zoom-btn" data-zoom-action="out" data-zoom-target="sap">−</button>
-      <span class="zoom-level" id="zoom-level-sap">100%</span>
-      <button class="zoom-btn" data-zoom-action="in" data-zoom-target="sap">+</button>
+    <div class="table-controls-row">
+      <div class="badge-row" id="badges-sap"></div>
+      <div class="table-controls-right">
+        <div class="zoom-control" data-zoom-target="sap">
+          <span class="zoom-label">Zoom</span>
+          <button class="zoom-btn" data-zoom-action="out" data-zoom-target="sap">−</button>
+          <span class="zoom-level" id="zoom-level-sap">100%</span>
+          <button class="zoom-btn" data-zoom-action="in" data-zoom-target="sap">+</button>
+        </div>
+        <button class="collapse-table-btn" data-table-collapse="sap">Hide table</button>
+      </div>
     </div>
     <div class="table-wrap" id="table-wrap-sap">
       <table id="table-sap"><thead></thead><tbody></tbody></table>
@@ -457,7 +501,10 @@
 
     <div class="cols-box" id="cols-symbio">
       <div class="cols-head">
-        <span>Display columns</span>
+        <div class="cols-head-left">
+          <button class="cols-collapse-btn" data-cols-collapse="symbio">−</button>
+          <span>Display columns</span>
+        </div>
         <div class="cols-mini-actions">
           <button data-action="all" data-target="symbio">All</button>
           <button data-action="none" data-target="symbio">None</button>
@@ -466,13 +513,17 @@
       <div class="chips" id="chips-symbio"></div>
     </div>
 
-    <div class="badge-row" id="badges-symbio"></div>
-
-    <div class="zoom-control" data-zoom-target="symbio">
-      <span class="zoom-label">Zoom</span>
-      <button class="zoom-btn" data-zoom-action="out" data-zoom-target="symbio">−</button>
-      <span class="zoom-level" id="zoom-level-symbio">100%</span>
-      <button class="zoom-btn" data-zoom-action="in" data-zoom-target="symbio">+</button>
+    <div class="table-controls-row">
+      <div class="badge-row" id="badges-symbio"></div>
+      <div class="table-controls-right">
+        <div class="zoom-control" data-zoom-target="symbio">
+          <span class="zoom-label">Zoom</span>
+          <button class="zoom-btn" data-zoom-action="out" data-zoom-target="symbio">−</button>
+          <span class="zoom-level" id="zoom-level-symbio">100%</span>
+          <button class="zoom-btn" data-zoom-action="in" data-zoom-target="symbio">+</button>
+        </div>
+        <button class="collapse-table-btn" data-table-collapse="symbio">Hide table</button>
+      </div>
     </div>
     <div class="table-wrap" id="table-wrap-symbio">
       <table id="table-symbio"><thead></thead><tbody></tbody></table>
@@ -512,13 +563,17 @@
 
     <!-- TAB: Features, Finish Groups, Finish -->
     <div class="tab-panel active" data-tab-panel="main">
-      <div class="badge-row" id="badges-validate"></div>
-
-      <div class="zoom-control" data-zoom-target="validate">
-        <span class="zoom-label">Zoom</span>
-        <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate">−</button>
-        <span class="zoom-level" id="zoom-level-validate">100%</span>
-        <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate">+</button>
+      <div class="table-controls-row">
+        <div class="badge-row" id="badges-validate"></div>
+        <div class="table-controls-right">
+          <div class="zoom-control" data-zoom-target="validate">
+            <span class="zoom-label">Zoom</span>
+            <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate">−</button>
+            <span class="zoom-level" id="zoom-level-validate">100%</span>
+            <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate">+</button>
+          </div>
+          <button class="collapse-table-btn" data-table-collapse="validate">Hide table</button>
+        </div>
       </div>
       <div class="table-wrap" id="table-wrap-validate">
         <table id="table-validate"><thead></thead><tbody></tbody></table>
@@ -529,13 +584,17 @@
 
     <!-- TAB: Upcharges + List Price -->
     <div class="tab-panel" data-tab-panel="charges">
-      <div class="badge-row" id="badges-validate-charges"></div>
-
-      <div class="zoom-control" data-zoom-target="validate-charges">
-        <span class="zoom-label">Zoom</span>
-        <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate-charges">−</button>
-        <span class="zoom-level" id="zoom-level-validate-charges">100%</span>
-        <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate-charges">+</button>
+      <div class="table-controls-row">
+        <div class="badge-row" id="badges-validate-charges"></div>
+        <div class="table-controls-right">
+          <div class="zoom-control" data-zoom-target="validate-charges">
+            <span class="zoom-label">Zoom</span>
+            <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate-charges">−</button>
+            <span class="zoom-level" id="zoom-level-validate-charges">100%</span>
+            <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate-charges">+</button>
+          </div>
+          <button class="collapse-table-btn" data-table-collapse="validate-charges">Hide table</button>
+        </div>
       </div>
       <div class="table-wrap" id="table-wrap-validate-charges">
         <table id="table-validate-charges"><thead></thead><tbody></tbody></table>
@@ -704,6 +763,7 @@
       .map(fv => ({
         value: childText(fv, 'Value') || '',
         name: childText(fv, 'Name') || '',
+        charge: parseCharge(fv),
       }));
   }
 
@@ -749,16 +809,26 @@
   }
 
   function parseCharge(fv){
-    // Optional per-finish upcharge block: <Charge><Code/><Base/><Total/></Charge>.
+    // Optional per-finish upcharge block: <Charge><Code/><Description/><Base/><Total/></Charge>.
     // Not every export has this — only extract it when present.
     const chargeEl = Array.from(fv.children).find(c => c.tagName === 'Charge');
     if (!chargeEl) return null;
     const parseNum = t => (t === undefined ? undefined : parseFloat(t));
     return {
       code: childText(chargeEl, 'Code'),
+      description: childText(chargeEl, 'Description'),
       base: parseNum(childText(chargeEl, 'Base')),
       total: parseNum(childText(chargeEl, 'Total')),
     };
+  }
+
+  function chargeGroupId(charge){
+    // The human-readable pricing-group name (e.g. "FABRICPG3") can live in
+    // either Code or Description depending on the source system — SAP tends
+    // to put it in Code, Symbio tends to put an opaque generated ID in Code
+    // and the readable name in Description. Prefer whichever looks readable.
+    if (!charge) return undefined;
+    return charge.description || charge.code;
   }
 
   function parseSpecification(xmlString){
@@ -815,6 +885,19 @@
         plainFeatures.push({ code, name, mode, required: f.getAttribute('Required') || '', options: parseOptions(f) });
       }
     }
+
+    // Some exports (e.g. Symbio) only declare <Charge> at the finish-group
+    // (family) level, not per individual color — the color is expected to
+    // inherit its family's price. Build that fallback so comparisons don't
+    // falsely flag "no upcharge" when the family-level charge is actually
+    // present and matches.
+    const familyChargeMap = new Map();
+    finishGroups.forEach(g => g.options.forEach(o => {
+      if (o.charge) familyChargeMap.set(normCode(o.value), o.charge);
+    }));
+    colorEntries.forEach(entry => {
+      entry.effectiveCharge = entry.charge || familyChargeMap.get(normCode(entry.groupCode)) || null;
+    });
 
     return { product, header, plainFeatures, finishGroups, colorEntries };
   }
@@ -994,18 +1077,18 @@
       const sap = sapMap.get(key);
       const sym = symbioMap.get(key);
       if (!sap || !sym) continue;
-      if (!sap.charge && !sym.charge) continue;
+      const sapCharge = sap.effectiveCharge || null;
+      const symCharge = sym.effectiveCharge || null;
+      if (!sapCharge && !symCharge) continue;
 
-      const sapCharge = sap.charge || null;
-      const symCharge = sym.charge || null;
-      const chargeCode = (sapCharge && sapCharge.code) || (symCharge && symCharge.code) || sap.value;
+      const chargeCode = chargeGroupId(sapCharge) || chargeGroupId(symCharge) || sap.value;
       const description = sap.name || sym.name || '';
 
       const issues = [];
       if (!sapCharge) issues.push('No upcharge on SAP side');
       if (!symCharge) issues.push('No upcharge on Symbio side');
       if (sapCharge && symCharge) {
-        if (normText(sapCharge.code) !== normText(symCharge.code)) issues.push('Charge code differs: SAP "' + (sapCharge.code || 'n/a') + '" vs Symbio "' + (symCharge.code || 'n/a') + '"');
+        if (normText(chargeGroupId(sapCharge)) !== normText(chargeGroupId(symCharge))) issues.push('Charge group differs: SAP "' + (chargeGroupId(sapCharge) || 'n/a') + '" vs Symbio "' + (chargeGroupId(symCharge) || 'n/a') + '"');
         if (amountsDiffer(sapCharge.base, symCharge.base, priceTolerance)) issues.push('Base differs: SAP ' + fmtAmt(sapCharge.base) + ' vs Symbio ' + fmtAmt(symCharge.base));
         if (amountsDiffer(sapCharge.total, symCharge.total, priceTolerance)) issues.push('Total differs: SAP ' + fmtAmt(sapCharge.total) + ' vs Symbio ' + fmtAmt(symCharge.total));
       }
@@ -1162,7 +1245,7 @@
         state.rows = rows;
         state.columns = columns;
         state.visible = new Set(columns);
-        const note = wasSanitized ? '' : '';
+        const note = wasSanitized ? ' (auto-fixed unescaped "&" characters)' : '';
         setStatus('ok', 'Converted — ' + rows.length + ' row(s), ' + columns.length + ' column(s) detected.' + note);
         els.colsBox.classList.add('show');
         els.placeholder.style.display = 'none';
@@ -1557,6 +1640,31 @@
       level = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, level));
       zoomLevels[target] = Math.round(level * 100) / 100;
       applyZoom(target);
+    });
+  });
+
+  // ---------- Display Columns collapse toggle ----------
+
+  document.querySelectorAll('[data-cols-collapse]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-cols-collapse');
+      const box = document.getElementById('cols-' + target);
+      if (!box) return;
+      const collapsed = box.classList.toggle('collapsed');
+      btn.textContent = collapsed ? '+' : '−';
+    });
+  });
+
+  // ---------- Table collapse (hide/show) ----------
+
+  document.querySelectorAll('[data-table-collapse]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-table-collapse');
+      const wrap = document.getElementById('table-wrap-' + target);
+      if (!wrap) return;
+      const nowHidden = wrap.style.display === 'none';
+      wrap.style.display = nowHidden ? '' : 'none';
+      btn.textContent = nowHidden ? 'Hide table' : 'Show table';
     });
   });
 
