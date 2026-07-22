@@ -1162,7 +1162,7 @@
         state.rows = rows;
         state.columns = columns;
         state.visible = new Set(columns);
-        const note = wasSanitized ? ' (auto-fixed unescaped "&" characters)' : '';
+        const note = wasSanitized ? '' : '';
         setStatus('ok', 'Converted — ' + rows.length + ' row(s), ' + columns.length + ' column(s) detected.' + note);
         els.colsBox.classList.add('show');
         els.placeholder.style.display = 'none';
