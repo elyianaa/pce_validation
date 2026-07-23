@@ -856,6 +856,32 @@
       }
     }
 
+    // Top-level <ChargeList> (direct child of <Specification>, NOT the per-finish
+    // <Charge> blocks inside FeatureValue) — some styles encode their real base
+    // price here instead of in Product.PriceInfo.Price (which shows 0 in that case).
+    const chargeListEl = Array.from(root.children).find(c => c.tagName === 'ChargeList');
+    const baseCharges = chargeListEl
+      ? Array.from(chargeListEl.children).filter(c => c.tagName === 'Charge').map(c => {
+          const parseNum = t => (t === undefined ? undefined : parseFloat(t));
+          return {
+            code: childText(c, 'Code'),
+            description: childText(c, 'Description'),
+            base: parseNum(childText(c, 'Base')),
+            total: parseNum(childText(c, 'Total')),
+          };
+        })
+      : [];
+
+    let effectiveListPrice = product.listPrice;
+    let priceSource = 'Product.PriceInfo.Price';
+    if ((effectiveListPrice === undefined || effectiveListPrice === 0) && baseCharges.length) {
+      effectiveListPrice = baseCharges.reduce((sum, c) => sum + (c.total !== undefined ? c.total : (c.base || 0)), 0);
+      priceSource = 'ChargeList (' + baseCharges.map(c => c.code || c.description || '?').join(' + ') + ')';
+    }
+    product.effectiveListPrice = effectiveListPrice;
+    product.priceSource = priceSource;
+    product.baseCharges = baseCharges;
+
     const plainFeatures = [];   // ordinary features (Selection etc.) — matched by Feature.Code
     const finishGroups = [];    // Mode=FinishGroup containers — matched by normalized group code
     const colorEntries = [];    // Mode=Finish leaf colors — matched by normalized color Value
@@ -1084,22 +1110,27 @@
       const chargeCode = chargeGroupId(sapCharge) || chargeGroupId(symCharge) || sap.value;
       const description = sap.name || sym.name || '';
 
-      const issues = [];
+      const issues = [];   // drives Match/Mismatch status — amounts only
+      const notes = [];    // informational only — never affects status
       if (!sapCharge) issues.push('No upcharge on SAP side');
       if (!symCharge) issues.push('No upcharge on Symbio side');
       if (sapCharge && symCharge) {
-        if (normText(chargeGroupId(sapCharge)) !== normText(chargeGroupId(symCharge))) issues.push('Charge group differs: SAP "' + (chargeGroupId(sapCharge) || 'n/a') + '" vs Symbio "' + (chargeGroupId(symCharge) || 'n/a') + '"');
+        // Charge group/code labels are represented inconsistently across
+        // systems (readable code vs opaque generated ID vs full descriptive
+        // text) — not a meaningful basis for mismatch, so this is a note only.
+        if (normText(chargeGroupId(sapCharge)) !== normText(chargeGroupId(symCharge))) notes.push('Charge group label differs: SAP "' + (chargeGroupId(sapCharge) || 'n/a') + '" vs Symbio "' + (chargeGroupId(symCharge) || 'n/a') + '"');
         if (amountsDiffer(sapCharge.base, symCharge.base, priceTolerance)) issues.push('Base differs: SAP ' + fmtAmt(sapCharge.base) + ' vs Symbio ' + fmtAmt(symCharge.base));
         if (amountsDiffer(sapCharge.total, symCharge.total, priceTolerance)) issues.push('Total differs: SAP ' + fmtAmt(sapCharge.total) + ' vs Symbio ' + fmtAmt(symCharge.total));
       }
 
+      const allNotes = [...issues, ...notes];
       rows.push({
         chargeCode: chargeCode,
         description: description,
         sapValue: formatCharge(sapCharge),
         symbioValue: formatCharge(symCharge),
         status: issues.length ? 'Mismatch' : 'Match',
-        details: 'Finish ' + sap.value + ' (' + description + ') — Feature: SAP ' + featureLabel(sap) + ' | Symbio ' + featureLabel(sym) + '.' + (issues.length ? ' ' + issues.join('; ') + '.' : ''),
+        details: 'Finish ' + sap.value + ' (' + description + ') — Feature: SAP ' + featureLabel(sap) + ' | Symbio ' + featureLabel(sym) + '.' + (allNotes.length ? ' ' + allNotes.join('; ') + '.' : ''),
       });
     }
     return rows;
@@ -1115,23 +1146,24 @@
     const chargeRows = diffCharges(sapSpec.colorEntries, symbioSpec.colorEntries, priceTolerance);
 
     // List Price comparison now lives in the Upcharges tab too — same shape as chargeRows.
-    if (sapSpec.product.listPrice !== undefined || symbioSpec.product.listPrice !== undefined) {
-      const sapPrice = sapSpec.product.listPrice;
-      const symPrice = symbioSpec.product.listPrice;
+    if (sapSpec.product.effectiveListPrice !== undefined || symbioSpec.product.effectiveListPrice !== undefined) {
+      const sapPrice = sapSpec.product.effectiveListPrice;
+      const symPrice = symbioSpec.product.effectiveListPrice;
+      const sourceNote = ' (SAP source: ' + sapSpec.product.priceSource + ' | Symbio source: ' + symbioSpec.product.priceSource + ')';
       let status, details;
       if (sapPrice === undefined || symPrice === undefined) {
         status = 'Mismatch';
-        details = 'Price missing on one side — SAP: ' + (sapPrice === undefined ? 'n/a' : sapPrice) + ', Symbio: ' + (symPrice === undefined ? 'n/a' : symPrice);
+        details = 'Price missing on one side — SAP: ' + (sapPrice === undefined ? 'n/a' : sapPrice) + ', Symbio: ' + (symPrice === undefined ? 'n/a' : symPrice) + sourceNote;
       } else if (Math.abs(sapPrice - symPrice) <= priceTolerance) {
         status = 'Match';
-        details = 'Product list price.';
+        details = 'Base/list price.' + sourceNote;
       } else {
         status = 'Mismatch';
-        details = 'Product list price differs by ' + Math.abs(sapPrice - symPrice).toFixed(2) + '.';
+        details = 'Base/list price differs by ' + Math.abs(sapPrice - symPrice).toFixed(2) + '.' + sourceNote;
       }
       chargeRows.unshift({
         chargeCode: 'LIST_PRICE',
-        description: 'List Price',
+        description: 'Base/List Price',
         sapValue: sapPrice !== undefined ? sapPrice.toFixed(2) : 'n/a',
         symbioValue: symPrice !== undefined ? symPrice.toFixed(2) : 'n/a',
         status,
@@ -1245,7 +1277,7 @@
         state.rows = rows;
         state.columns = columns;
         state.visible = new Set(columns);
-        const note = wasSanitized ? ' (auto-fixed unescaped "&" characters)' : '';
+        const note = wasSanitized ? '' : '';
         setStatus('ok', 'Converted — ' + rows.length + ' row(s), ' + columns.length + ' column(s) detected.' + note);
         els.colsBox.classList.add('show');
         els.placeholder.style.display = 'none';
