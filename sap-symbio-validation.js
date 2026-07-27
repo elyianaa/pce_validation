@@ -330,3 +330,31 @@
       btn.textContent = nowHidden ? 'Hide table' : 'Show table';
     });
   });
+
+  // ---------- Light / dark theme toggle ----------
+
+  const themeBtn = document.getElementById('theme-toggle');
+  const themeIcon = document.getElementById('theme-toggle-icon');
+  const themeLabel = document.getElementById('theme-toggle-label');
+
+  function applyThemeUI(theme){
+    if (themeIcon) themeIcon.innerHTML = theme === 'light' ? '&#9788;' : '&#9789;';
+    if (themeLabel) themeLabel.textContent = theme === 'light' ? 'Light' : 'Dark';
+  }
+
+  // Sync button label with whatever the pre-body script already applied (avoids flash).
+  applyThemeUI(document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
+
+  if (themeBtn) {
+    themeBtn.addEventListener('click', () => {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      const next = isLight ? 'dark' : 'light';
+      if (next === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      applyThemeUI(next);
+      try { localStorage.setItem('pce-theme', next); } catch (e) { /* storage unavailable — theme just won't persist */ }
+    });
+  }
