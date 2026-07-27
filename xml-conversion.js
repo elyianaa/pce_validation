@@ -166,6 +166,23 @@
     return (s === undefined || s === null) ? '' : String(s).trim().toUpperCase();
   }
 
+  function fuzzyNameMatch(a, b){
+    // Symbio names are often simplified versions of SAP names — e.g.
+    // "BALTIC 4773" -> "Baltic", "NICKEL METALLIC (TRANS)" -> "Nickel Metallic",
+    // "MILK SMOOTH" -> "Milk". Strip parenthetical notes and trailing numeric
+    // codes, then treat one being a leading substring of the other as a match.
+    const clean = s => normText(s)
+      .replace(/\([^)]*\)/g, '')
+      .replace(/\b\d{2,}\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const ca = clean(a);
+    const cb = clean(b);
+    if (ca === cb) return true;
+    if (ca && cb && (ca.indexOf(cb) === 0 || cb.indexOf(ca) === 0)) return true;
+    return false;
+  }
+
   function collectAllFeatures(root){
     // Every <Feature> anywhere in the document, regardless of nesting depth —
     // handles both SAP's nested-per-group style and Symbio's flat style.
@@ -324,7 +341,7 @@
       }
 
       const issues = [];
-      if (normText(sap.name) !== normText(sym.name)) {
+      if (!fuzzyNameMatch(sap.name, sym.name)) {
         issues.push('Name differs: SAP "' + sap.name + '" vs Symbio "' + sym.name + '"');
       }
       if (normText(sap.mode) !== normText(sym.mode)) {
@@ -387,7 +404,7 @@
         rows.push({ category: 'Finish Group', code: sym.value, name: sym.name, status: 'Missing in SAP', details: 'Finish group exists in Symbio but not in SAP.' });
         continue;
       }
-      const nameDiffers = normText(sap.name) !== normText(sym.name);
+      const nameDiffers = !fuzzyNameMatch(sap.name, sym.name);
       rows.push({
         category: 'Finish Group',
         code: sap.value,
@@ -435,7 +452,7 @@
         continue;
       }
       const issues = [];
-      if (normText(sap.name) !== normText(sym.name)) {
+      if (!fuzzyNameMatch(sap.name, sym.name)) {
         issues.push('Name differs: SAP "' + sap.name + '" vs Symbio "' + sym.name + '"');
       }
       if (sym.hasExplicitGroup && normCode(sap.groupCode) !== normCode(sym.groupCode)) {
@@ -650,7 +667,7 @@
         state.rows = rows;
         state.columns = columns;
         state.visible = new Set(columns);
-        const note = wasSanitized ? ' (auto-fixed unescaped "&" characters)' : '';
+        const note = wasSanitized ? '' : '';
         setStatus('ok', 'Converted — ' + rows.length + ' row(s), ' + columns.length + ' column(s) detected.' + note);
         els.colsBox.classList.add('show');
         els.placeholder.style.display = 'none';
