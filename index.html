@@ -40,14 +40,15 @@
 
   <!-- SAP PANEL -->
   <section class="panel sap" id="panel-sap">
-    <div class="panel-head">
+    <div class="panel-head-sap">
       <div class="panel-title">
         <span class="swatch sap"></span>
         <h2>SAP Styles</h2>
       </div>
-      <span class="panel-sub">newest sap version</span>
+      <span class="panel-sub-sap">newest sap version</span>
     </div>
 
+    <div class="panel-body" id="panel-body-sap">
     <textarea id="xml-sap" placeholder="Paste PCE XML here..."></textarea>
 
     <div class="row-actions">
@@ -90,13 +91,19 @@
     </div>
 
     <div class="placeholder" id="placeholder-sap">table results of xml conversion will appear here</div>
+    </div>
   </section>
 
-  <div class="divider"></div>
+  <div class="divider">
+    <button class="panels-toggle-btn" id="panels-toggle" title="Hide/show both conversion panels">
+      <span id="panels-toggle-icon">&#8722;</span>
+      <span id="panels-toggle-label">Hide Panels</span>
+    </button>
+  </div>
 
   <!-- SYMBIO PANEL -->
   <section class="panel symbio" id="panel-symbio">
-    <div class="panel-head">
+    <div class="panel-head-symbio">
       <div class="panel-title">
         <span class="swatch symbio"></span>
         <h2>Symbio Styles</h2>
@@ -104,6 +111,7 @@
       <span class="panel-sub">newest symbio version</span>
     </div>
 
+    <div class="panel-body" id="panel-body-symbio">
     <textarea id="xml-symbio" placeholder="Paste PCE XML here..."></textarea>
 
     <div class="row-actions">
@@ -146,6 +154,7 @@
     </div>
 
     <div class="placeholder" id="placeholder-symbio">table results of xml conversion will appear here</div>
+    </div>
   </section>
 
 </div>
@@ -158,42 +167,52 @@
         <h2>SAP vs Symbio Validation</h2>
       </div>
       <div class="validate-controls">
-        <label class="tolerance-field">
-          Price tolerance
-          <input type="number" id="price-tolerance" value="0.01" min="0" step="0.01">
-        </label>
         <button class="btn-primary validate" id="run-validate">Run Validation</button>
         <button class="btn-ghost" id="reset-validate">Reset</button>
         <button class="btn-ghost" id="download-validate-xlsx">Download Report XLSX</button>
       </div>
     </div>
     <span class="panel-sub">source of truth: SAP</span>
+
     <span class="panel-sub" id="validate-meta"></span>
 
     <div class="status" id="status-validate"><span class="dot"></span><span class="msg"></span></div>
 
-    <div class="tabs">
-      <button class="tab-btn active" data-tab-btn="main">Features &amp; Finishes</button>
-      <button class="tab-btn" data-tab-btn="charges">Upcharges</button>
+    <div class="tabs-row">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab-btn="main">Features &amp; Finishes</button>
+        <button class="tab-btn" data-tab-btn="charges">Upcharges</button>
+      </div>
+      <div class="badge-row" id="badges-validate" data-badge-panel="main"></div>
+      <div class="badge-row" id="badges-validate-charges" data-badge-panel="charges" style="display:none"></div>
+      <div class="table-controls-right" data-controls-panel="main">
+        <div class="table-search">
+          <input type="text" id="search-validate" placeholder="Search...">
+        </div>
+        <div class="zoom-control" data-zoom-target="validate">
+          <span class="zoom-label">Zoom</span>
+          <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate">−</button>
+          <span class="zoom-level" id="zoom-level-validate">100%</span>
+          <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate">+</button>
+        </div>
+        <button class="collapse-table-btn" data-table-collapse="validate">Hide table</button>
+      </div>
+      <div class="table-controls-right" data-controls-panel="charges" style="display:none">
+        <div class="table-search">
+          <input type="text" id="search-validate-charges" placeholder="Search...">
+        </div>
+        <div class="zoom-control" data-zoom-target="validate-charges">
+          <span class="zoom-label">Zoom</span>
+          <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate-charges">−</button>
+          <span class="zoom-level" id="zoom-level-validate-charges">100%</span>
+          <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate-charges">+</button>
+        </div>
+        <button class="collapse-table-btn" data-table-collapse="validate-charges">Hide table</button>
+      </div>
     </div>
 
     <!-- TAB: Features, Finish Groups, Finish -->
     <div class="tab-panel active" data-tab-panel="main">
-      <div class="table-controls-row">
-        <div class="badge-row" id="badges-validate"></div>
-        <div class="table-controls-right">
-          <div class="table-search">
-            <input type="text" id="search-validate" placeholder="Search...">
-          </div>
-          <div class="zoom-control" data-zoom-target="validate">
-            <span class="zoom-label">Zoom</span>
-            <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate">−</button>
-            <span class="zoom-level" id="zoom-level-validate">100%</span>
-            <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate">+</button>
-          </div>
-          <button class="collapse-table-btn" data-table-collapse="validate">Hide table</button>
-        </div>
-      </div>
       <div class="table-wrap" id="table-wrap-validate">
         <table id="table-validate"><thead></thead><tbody></tbody></table>
       </div>
@@ -203,21 +222,6 @@
 
     <!-- TAB: Upcharges + List Price -->
     <div class="tab-panel" data-tab-panel="charges">
-      <div class="table-controls-row">
-        <div class="badge-row" id="badges-validate-charges"></div>
-        <div class="table-controls-right">
-          <div class="table-search">
-            <input type="text" id="search-validate-charges" placeholder="Search...">
-          </div>
-          <div class="zoom-control" data-zoom-target="validate-charges">
-            <span class="zoom-label">Zoom</span>
-            <button class="zoom-btn" data-zoom-action="out" data-zoom-target="validate-charges">−</button>
-            <span class="zoom-level" id="zoom-level-validate-charges">100%</span>
-            <button class="zoom-btn" data-zoom-action="in" data-zoom-target="validate-charges">+</button>
-          </div>
-          <button class="collapse-table-btn" data-table-collapse="validate-charges">Hide table</button>
-        </div>
-      </div>
       <div class="table-wrap" id="table-wrap-validate-charges">
         <table id="table-validate-charges"><thead></thead><tbody></tbody></table>
       </div>
