@@ -75,7 +75,7 @@
     z-index: 20;
   }
   .topbar-inner{
-    max-width: min(1800px, 96vw);
+    max-width: min(2200px, 95vw);
     margin: 0 auto;
     display:flex;
     align-items: baseline;
@@ -122,7 +122,7 @@
   .theme-toggle:hover{ border-color: var(--text-faint); }
   #theme-toggle-icon{ font-size: 13px; line-height: 1; }
   .stage{
-    max-width: min(1800px, 96vw);
+    max-width: min(2200px, 98vw);
     margin: 0 auto;
     padding: 32px;
     display: grid;
@@ -137,14 +137,39 @@
     background: linear-gradient(180deg, transparent, var(--line) 10%, var(--line) 90%, transparent);
     position: relative;
   }
+  .panels-toggle-btn{
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, 0);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    padding: 7px 14px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text-dim);
+    border-radius: 14px;
+    cursor: pointer;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 5;
+  }
+  .panels-toggle-btn:hover{ color: var(--text); border-color: var(--text-faint); }
+  .panels-toggle-btn:active{ transform: translate(-50%, 1px); }
   .panel{ display:flex; flex-direction:column; gap: 16px; min-width:0; }
-  .panel-head{ display:flex; align-items:center; justify-content:space-between; }
+  .panel-body{ display:flex; flex-direction:column; gap: 16px; }
+  .panel-head-sap{ display:flex; align-items:center; justify-content:space-between; }
+  .panel-head-symbio{ display:flex; align-items:center; justify-content:space-between; margin-left: 40px}
   .panel-title{ display:flex; align-items:center; gap: 10px; }
   .swatch{ width:9px; height:9px; border-radius:1px; }
   .swatch.sap{ background: var(--sap); box-shadow: 0 0 8px var(--sap); }
   .swatch.symbio{ background: var(--symbio); box-shadow: 0 0 8px var(--symbio); }
   .panel-title h2{ font-size: 15px; margin:0; font-weight:600; letter-spacing:0.02em; }
   .panel-sub{ font-family:'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.06em; text-transform:uppercase; }
+  .panel-sub-sap{ font-family:'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.06em; text-transform:uppercase; margin-right: 40px}
 
   textarea{
     width:100%;
@@ -319,6 +344,11 @@
     display:none;
   }
   .table-wrap.show{ display:block; }
+
+  /* expand validation table */
+  #table-wrap-validate, #table-wrap-validate-charges{
+    max-height: 750px;
+  }
   table{ border-collapse: collapse; width: 100%; font-size: 12px; }
   thead th{
     position: sticky; top:0;
@@ -377,7 +407,7 @@
   .badge.active{ background: var(--active-overlay); box-shadow: inset 0 0 0 1px currentColor; }
 
   /* ---- Validation section ---- */
-  .validate-stage{ max-width: min(1800px, 96vw); margin: 0 auto; padding: 0 32px 32px; }
+  .validate-stage{ max-width: min(2200px, 98vw); margin: 0 auto; padding: 0 32px 32px; }
   .swatch.validate{ background: var(--validate); box-shadow: 0 0 8px var(--validate); }
   .panel.validate thead th{ box-shadow: inset 0 -2px 0 var(--validate-dim); }
   .panel.validate textarea:focus{ border-color: var(--validate); }
@@ -386,24 +416,6 @@
     flex-wrap: wrap; gap: 12px;
   }
   .validate-controls{ display:flex; align-items:center; gap: 12px; flex-wrap: wrap; }
-  .tolerance-field{
-    display:flex; align-items:center; gap: 8px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-  .tolerance-field input{
-    width: 70px;
-    background: var(--panel-raised);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    color: var(--text);
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 12px;
-    padding: 6px 8px;
-    outline: none;
-  }
-  .tolerance-field input:focus{ border-color: var(--validate); }
   .btn-primary.validate{ background: var(--validate); color: #16101F; }
   #validate-meta{
     display: flex;
@@ -448,7 +460,15 @@
   .zoom-btn:hover{ border-color: var(--text-faint); }
   .zoom-level{ min-width: 36px; text-align: center; }
 
-  .tabs{ display:flex; gap: 8px; margin-top: 4px; }
+  .tabs{ display:flex; gap: 8px; }
+  .tabs-row{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+  }
   .tab-btn{
     padding: 8px 16px;
     border: 1px solid var(--line);
