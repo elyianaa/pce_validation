@@ -7,7 +7,6 @@
     tableWrap: document.getElementById('table-wrap-validate'),
     table: document.getElementById('table-validate'),
     placeholder: document.getElementById('placeholder-validate'),
-    tolerance: document.getElementById('price-tolerance'),
     runBtn: document.getElementById('run-validate'),
     resetBtn: document.getElementById('reset-validate'),
     xlsxBtn: document.getElementById('download-validate-xlsx'),
@@ -176,10 +175,7 @@
       return;
     }
 
-    const tolerance = parseFloat(vEls.tolerance.value);
-    const priceTolerance = isNaN(tolerance) ? 0 : tolerance;
-
-    const { rows, chargeRows } = diffSpecifications(sapState.spec, symbioState.spec, priceTolerance);
+    const { rows, chargeRows } = diffSpecifications(sapState.spec, symbioState.spec);
 
     lastValidation = { rows, chargeRows };
     statusFilter = null;
@@ -276,6 +272,8 @@
       const tab = btn.getAttribute('data-tab-btn');
       document.querySelectorAll('[data-tab-btn]').forEach(b => b.classList.toggle('active', b === btn));
       document.querySelectorAll('[data-tab-panel]').forEach(p => p.classList.toggle('active', p.getAttribute('data-tab-panel') === tab));
+      document.querySelectorAll('[data-badge-panel]').forEach(b => { b.style.display = (b.getAttribute('data-badge-panel') === tab) ? '' : 'none'; });
+      document.querySelectorAll('[data-controls-panel]').forEach(c => { c.style.display = (c.getAttribute('data-controls-panel') === tab) ? '' : 'none'; });
     });
   });
 
@@ -356,5 +354,23 @@
       }
       applyThemeUI(next);
       try { localStorage.setItem('pce-theme', next); } catch (e) { /* storage unavailable — theme just won't persist */ }
+    });
+  }
+
+  // ---------- Hide/show both conversion panels (SAP + Symbio) at once ----------
+
+  const panelsToggleBtn = document.getElementById('panels-toggle');
+  const panelsToggleIcon = document.getElementById('panels-toggle-icon');
+  const panelsToggleLabel = document.getElementById('panels-toggle-label');
+  const panelBodySap = document.getElementById('panel-body-sap');
+  const panelBodySymbio = document.getElementById('panel-body-symbio');
+
+  if (panelsToggleBtn && panelBodySap && panelBodySymbio) {
+    panelsToggleBtn.addEventListener('click', () => {
+      const nowHidden = panelBodySap.style.display !== 'none';
+      panelBodySap.style.display = nowHidden ? 'none' : '';
+      panelBodySymbio.style.display = nowHidden ? 'none' : '';
+      panelsToggleIcon.innerHTML = nowHidden ? '&#43;' : '&#8722;';
+      panelsToggleLabel.textContent = nowHidden ? 'Show Panels' : 'Hide Panels';
     });
   }
