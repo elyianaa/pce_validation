@@ -283,7 +283,8 @@
       const modeNorm = mode.trim().toLowerCase();
 
       if (modeNorm === 'finishgroup') {
-        finishGroups.push({ code: code || '', name, options: parseOptions(f) });
+        const groupOptions = parseOptions(f).map(o => Object.assign(o, { containerCode: code || '', containerName: name }));
+        finishGroups.push({ code: code || '', name, options: groupOptions });
       } else if (modeNorm === 'finish') {
         const fvl = Array.from(f.children).find(c => c.tagName === 'FeatureValueList');
         const rawOptions = fvl ? Array.from(fvl.children).filter(c => c.tagName === 'FeatureValue') : [];
@@ -374,6 +375,11 @@
     return rows;
   }
 
+  function containerLabel(entry){
+    if (!entry) return '';
+    return entry.containerCode + (entry.containerName ? ' ' + entry.containerName : '');
+  }
+
   function diffFinishGroups(sapGroups, symbioGroups){
     // The FinishGroup *container* Feature's own code (e.g. SAP "BASIC" vs
     // Symbio "SG0113") is just an internal record ID per system and will
@@ -397,20 +403,21 @@
       const sap = sapMap.get(key);
       const sym = symbioMap.get(key);
       if (sap && !sym) {
-        rows.push({ category: 'Finish Group', code: sap.value, name: sap.name, status: 'Missing in Symbio', details: 'Finish group exists in SAP but not found in Symbio.' });
+        rows.push({ category: 'Finish Group', code: sap.value, name: sap.name, status: 'Missing in Symbio', details: 'Finish group exists in SAP (in ' + containerLabel(sap) + ') but not found in Symbio.' });
         continue;
       }
       if (!sap && sym) {
-        rows.push({ category: 'Finish Group', code: sym.value, name: sym.name, status: 'Missing in SAP', details: 'Finish group exists in Symbio but not in SAP.' });
+        rows.push({ category: 'Finish Group', code: sym.value, name: sym.name, status: 'Missing in SAP', details: 'Finish group exists in Symbio (in ' + containerLabel(sym) + ') but not in SAP.' });
         continue;
       }
       const nameDiffers = !fuzzyNameMatch(sap.name, sym.name);
+      const containerNote = 'Container: SAP ' + containerLabel(sap) + ' | Symbio ' + containerLabel(sym) + '.';
       rows.push({
         category: 'Finish Group',
         code: sap.value,
         name: sap.name,
         status: nameDiffers ? 'Mismatch' : 'Match',
-        details: nameDiffers ? ('Name differs: SAP "' + sap.name + '" vs Symbio "' + sym.name + '"') : 'Finish group code and name match.',
+        details: (nameDiffers ? ('Name differs: SAP "' + sap.name + '" vs Symbio "' + sym.name + '"') : 'Finish group code and name match.') + ' ' + containerNote,
       });
     }
     return rows;
@@ -425,10 +432,10 @@
     return v === undefined ? 'n/a' : v.toFixed(2);
   }
 
-  function amountsDiffer(a, b, tolerance){
+  function amountsDiffer(a, b){
     if (a === undefined && b === undefined) return false;
     if (a === undefined || b === undefined) return true;
-    return Math.abs(a - b) > tolerance;
+    return Math.abs(a - b) > 0.001; // float-precision safety only, not a business tolerance
   }
 
   function diffColorEntries(sapColors, symbioColors){
@@ -478,7 +485,7 @@
     return parts.length ? parts.join(' / ') : 'n/a';
   }
 
-  function diffCharges(sapColors, symbioColors, priceTolerance){
+  function diffCharges(sapColors, symbioColors){
     // Separate table for the Upcharges tab: Charge Code | Description | SAP | Symbio | Status | Details.
     // Only produced for finishes that exist on both sides AND have a <Charge> block on at least one side.
     const sapMap = new Map(sapColors.map(c => [normCode(c.value), c]));
@@ -509,8 +516,8 @@
         // systems (readable code vs opaque generated ID vs full descriptive
         // text) — not a meaningful basis for mismatch, so this is a note only.
         if (normText(chargeGroupId(sapCharge)) !== normText(chargeGroupId(symCharge))) notes.push('Charge group label differs: SAP "' + (chargeGroupId(sapCharge) || 'n/a') + '" vs Symbio "' + (chargeGroupId(symCharge) || 'n/a') + '"');
-        if (amountsDiffer(sapCharge.base, symCharge.base, priceTolerance)) issues.push('Base differs: SAP ' + fmtAmt(sapCharge.base) + ' vs Symbio ' + fmtAmt(symCharge.base));
-        if (amountsDiffer(sapCharge.total, symCharge.total, priceTolerance)) issues.push('Total differs: SAP ' + fmtAmt(sapCharge.total) + ' vs Symbio ' + fmtAmt(symCharge.total));
+        if (amountsDiffer(sapCharge.base, symCharge.base)) issues.push('Base differs: SAP ' + fmtAmt(sapCharge.base) + ' vs Symbio ' + fmtAmt(symCharge.base));
+        if (amountsDiffer(sapCharge.total, symCharge.total)) issues.push('Total differs: SAP ' + fmtAmt(sapCharge.total) + ' vs Symbio ' + fmtAmt(symCharge.total));
       }
 
       const allNotes = [...issues, ...notes];
@@ -526,14 +533,14 @@
     return rows;
   }
 
-  function diffSpecifications(sapSpec, symbioSpec, priceTolerance){
+  function diffSpecifications(sapSpec, symbioSpec){
     const rows = [
       ...diffPlainFeatures(sapSpec.plainFeatures, symbioSpec.plainFeatures),
       ...diffFinishGroups(sapSpec.finishGroups, symbioSpec.finishGroups),
       ...diffColorEntries(sapSpec.colorEntries, symbioSpec.colorEntries),
     ];
 
-    const chargeRows = diffCharges(sapSpec.colorEntries, symbioSpec.colorEntries, priceTolerance);
+    const chargeRows = diffCharges(sapSpec.colorEntries, symbioSpec.colorEntries);
 
     // List Price comparison now lives in the Upcharges tab too — same shape as chargeRows.
     if (sapSpec.product.effectiveListPrice !== undefined || symbioSpec.product.effectiveListPrice !== undefined) {
@@ -544,7 +551,7 @@
       if (sapPrice === undefined || symPrice === undefined) {
         status = 'Mismatch';
         details = 'Price missing on one side — SAP: ' + (sapPrice === undefined ? 'n/a' : sapPrice) + ', Symbio: ' + (symPrice === undefined ? 'n/a' : symPrice) + sourceNote;
-      } else if (Math.abs(sapPrice - symPrice) <= priceTolerance) {
+      } else if (!amountsDiffer(sapPrice, symPrice)) {
         status = 'Match';
         details = 'Base/list price.' + sourceNote;
       } else {
