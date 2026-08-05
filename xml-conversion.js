@@ -238,12 +238,21 @@
     } : {};
 
     if (productEl) {
+      const catalogEl = Array.from(productEl.children).find(c => c.tagName === 'Catalog');
+      product.catalog = catalogEl ? {
+        code: childText(catalogEl, 'Code'),
+        name: childText(catalogEl, 'Name'),
+        version: childText(catalogEl, 'Version'),
+      } : {};
+
       const priceInfo = Array.from(productEl.children).find(c => c.tagName === 'PriceInfo');
       if (priceInfo) {
         const priceText = childText(priceInfo, 'Price');
         product.listPrice = priceText !== undefined ? parseFloat(priceText) : undefined;
         product.currency = priceInfo.getAttribute('Currency') || undefined;
       }
+    } else {
+      product.catalog = {};
     }
 
     // Top-level <ChargeList> (direct child of <Specification>, NOT the per-finish
@@ -573,8 +582,199 @@
 
   // ---------- Panel controller ----------
 
+  // ---------- Generic Excel-style column filter (reused across all tables) ----------
+
+  function filterCellValue(v){
+    return (v === undefined || v === null || v === '') ? '(blank)' : String(v);
+  }
+
+  function createColumnFilter(){
+    const excluded = {}; // colKey -> Set of excluded normalized string values
+    return {
+      isExcluded(col, val){ const s = excluded[col]; return s ? s.has(val) : false; },
+      toggle(col, val){
+        if (!excluded[col]) excluded[col] = new Set();
+        if (excluded[col].has(val)) excluded[col].delete(val); else excluded[col].add(val);
+        if (excluded[col].size === 0) delete excluded[col];
+      },
+      include(col, val){ if (excluded[col]) { excluded[col].delete(val); if (excluded[col].size === 0) delete excluded[col]; } },
+      exclude(col, val){ if (!excluded[col]) excluded[col] = new Set(); excluded[col].add(val); },
+      clear(col){ delete excluded[col]; },
+      clearAll(){ Object.keys(excluded).forEach(k => delete excluded[k]); },
+      isColumnFiltered(col){ return !!excluded[col]; },
+      matches(row, getVal, cols){
+        for (const col of cols) {
+          if (!excluded[col]) continue;
+          if (excluded[col].has(getVal(row, col))) return false;
+        }
+        return true;
+      },
+    };
+  }
+
+  let activeFilterPanel = null;
+  function closeColumnFilterPanel(){
+    if (activeFilterPanel) {
+      if (activeFilterPanel._cleanup) activeFilterPanel._cleanup();
+      activeFilterPanel.remove();
+      activeFilterPanel = null;
+    }
+  }
+  document.addEventListener('click', (e) => {
+    if (activeFilterPanel && !activeFilterPanel.contains(e.target) && !e.target.closest('.col-filter-btn')) {
+      closeColumnFilterPanel();
+    }
+  });
+
+  function openColumnFilterPanel(anchorBtn, col, rawValues, filterObj, onChange){
+    const alreadyOpenForThis = activeFilterPanel && activeFilterPanel._forCol === col && activeFilterPanel._forFilterObj === filterObj;
+    closeColumnFilterPanel();
+    if (alreadyOpenForThis) return;
+
+    const uniqueVals = Array.from(new Set(rawValues.map(filterCellValue))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    const panel = document.createElement('div');
+    panel.className = 'col-filter-panel';
+    panel._forCol = col;
+    panel._forFilterObj = filterObj;
+
+    const panelWidth = 220;
+    const anchorThead = anchorBtn.closest('thead') || anchorBtn.closest('table') || document;
+    function currentAnchor(){
+      return anchorThead.querySelector('[data-filter-col="' + col.replace(/"/g, '\\"') + '"]') || anchorBtn;
+    }
+    function reposition(){
+      const live = currentAnchor();
+      if (!live.isConnected) return; // header not currently rendered (e.g. table hidden) — keep last position
+      const rect = live.getBoundingClientRect();
+      let left = rect.left;
+      if (left + panelWidth > window.innerWidth - 8) left = window.innerWidth - panelWidth - 8;
+      panel.style.top = (rect.bottom + 4) + 'px';
+      panel.style.left = Math.max(8, left) + 'px';
+    }
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'col-filter-search';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search values...';
+    searchWrap.appendChild(searchInput);
+    panel.appendChild(searchWrap);
+
+    const actions = document.createElement('div');
+    actions.className = 'col-filter-actions';
+    const selectAllBtn = document.createElement('button');
+    selectAllBtn.type = 'button';
+    selectAllBtn.textContent = 'Select Shown';
+    const deselectAllBtn = document.createElement('button');
+    deselectAllBtn.type = 'button';
+    deselectAllBtn.textContent = 'Deselect Shown';
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.textContent = 'Clear Filter';
+    clearBtn.addEventListener('click', () => {
+      filterObj.clear(col);
+      onChange();
+      closeColumnFilterPanel();
+    });
+    actions.appendChild(selectAllBtn);
+    actions.appendChild(deselectAllBtn);
+    actions.appendChild(clearBtn);
+    panel.appendChild(actions);
+
+    const list = document.createElement('div');
+    list.className = 'col-filter-list';
+    panel.appendChild(list);
+
+    function renderList(filterText){
+      list.innerHTML = '';
+      const ft = (filterText || '').toLowerCase();
+      const shown = uniqueVals.filter(v => v.toLowerCase().indexOf(ft) !== -1);
+      selectAllBtn.onclick = () => {
+        shown.forEach(v => filterObj.include(col, v));
+        onChange();
+        renderList(searchInput.value);
+        updateIconState();
+      };
+      deselectAllBtn.onclick = () => {
+        shown.forEach(v => filterObj.exclude(col, v));
+        onChange();
+        renderList(searchInput.value);
+        updateIconState();
+      };
+      if (!shown.length) {
+        const empty = document.createElement('div');
+        empty.className = 'col-filter-empty';
+        empty.textContent = 'No matching values.';
+        list.appendChild(empty);
+        return;
+      }
+      shown.forEach(v => {
+        const item = document.createElement('label');
+        item.className = 'col-filter-item';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !filterObj.isExcluded(col, v);
+        cb.addEventListener('change', () => {
+          filterObj.toggle(col, v);
+          onChange();
+          updateIconState();
+        });
+        const span = document.createElement('span');
+        span.textContent = v;
+        span.title = v;
+        item.appendChild(cb);
+        item.appendChild(span);
+        list.appendChild(item);
+      });
+    }
+
+    function updateIconState(){
+      currentAnchor().classList.toggle('active', filterObj.isColumnFiltered(col));
+    }
+
+    searchInput.addEventListener('input', () => renderList(searchInput.value));
+    renderList('');
+
+    document.body.appendChild(panel);
+    activeFilterPanel = panel;
+    reposition();
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    panel._cleanup = () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+    searchInput.focus();
+  }
+
+  function buildFilterableHeaderCell(label, col, getValues, filterObj, onChange){
+    const th = document.createElement('th');
+    const inner = document.createElement('div');
+    inner.className = 'th-inner';
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'th-label';
+    labelSpan.textContent = label;
+    inner.appendChild(labelSpan);
+    const filterBtn = document.createElement('button');
+    filterBtn.type = 'button';
+    filterBtn.className = 'col-filter-btn' + (filterObj.isColumnFiltered(col) ? ' active' : '');
+    filterBtn.textContent = '\u25BE';
+    filterBtn.title = 'Filter ' + label;
+    filterBtn.dataset.filterCol = col;
+    filterBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openColumnFilterPanel(filterBtn, col, getValues(), filterObj, onChange);
+    });
+    inner.appendChild(filterBtn);
+    th.appendChild(inner);
+    return th;
+  }
+
   function initPanel(target){
     const state = { columns: [], rows: [], visible: new Set(), spec: null };
+    let searchQuery = '';
+    const columnFilter = createColumnFilter();
 
     const els = {
       textarea: document.getElementById('xml-' + target),
@@ -585,6 +785,7 @@
       table: document.getElementById('table-' + target),
       placeholder: document.getElementById('placeholder-' + target),
       badges: document.getElementById('badges-' + target),
+      search: document.getElementById('search-' + target),
     };
 
     function setStatus(kind, msg){
@@ -627,13 +828,19 @@
 
       const trh = document.createElement('tr');
       activeCols.forEach(c => {
-        const th = document.createElement('th');
-        th.textContent = c;
+        const th = buildFilterableHeaderCell(c, c, () => state.rows.map(r => r[c]), columnFilter, renderTable);
         trh.appendChild(th);
       });
       thead.appendChild(trh);
 
-      state.rows.forEach(row => {
+      state.rows
+        .filter(row => {
+          if (!searchQuery) return true;
+          const haystack = Object.values(row).join(' ').toLowerCase();
+          return haystack.indexOf(searchQuery.toLowerCase()) !== -1;
+        })
+        .filter(row => columnFilter.matches(row, (r, c) => filterCellValue(r[c]), activeCols))
+        .forEach(row => {
         const tr = document.createElement('tr');
         activeCols.forEach(c => {
           const td = document.createElement('td');
@@ -704,6 +911,9 @@
       state.columns = [];
       state.visible = new Set();
       state.spec = null;
+      searchQuery = '';
+      columnFilter.clearAll();
+      if (els.search) els.search.value = '';
       clearStatus();
       els.colsBox.classList.remove('show');
       els.tableWrap.classList.remove('show');
@@ -722,10 +932,21 @@
       renderTable();
     }
 
+    function getVisibleRows(){
+      return state.rows
+        .filter(row => {
+          if (!searchQuery) return true;
+          const haystack = Object.values(row).join(' ').toLowerCase();
+          return haystack.indexOf(searchQuery.toLowerCase()) !== -1;
+        })
+        .filter(row => columnFilter.matches(row, (r, c) => filterCellValue(r[c]), state.columns));
+    }
+
     function doCsv(){
       const activeCols = state.columns.filter(c => state.visible.has(c));
-      if (activeCols.length === 0 || state.rows.length === 0) {
-        setStatus('error', 'Nothing to copy yet — convert first.');
+      const rows = getVisibleRows();
+      if (activeCols.length === 0 || rows.length === 0) {
+        setStatus('error', 'Nothing to copy yet — convert first, or clear filters.');
         return;
       }
       const esc = v => {
@@ -733,12 +954,12 @@
         return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
       };
       const lines = [activeCols.map(esc).join(',')];
-      state.rows.forEach(row => {
+      rows.forEach(row => {
         lines.push(activeCols.map(c => esc(row[c])).join(','));
       });
       const csv = lines.join('\n');
       navigator.clipboard.writeText(csv).then(() => {
-        setStatus('ok', 'CSV copied to clipboard (' + activeCols.length + ' columns).');
+        setStatus('ok', 'CSV copied to clipboard (' + activeCols.length + ' columns, ' + rows.length + ' rows).');
       }).catch(() => {
         setStatus('error', 'Clipboard unavailable in this browser context.');
       });
@@ -746,8 +967,9 @@
 
     function doXlsx(){
       const activeCols = state.columns.filter(c => state.visible.has(c));
-      if (activeCols.length === 0 || state.rows.length === 0) {
-        setStatus('error', 'Nothing to export yet — convert first.');
+      const rows = getVisibleRows();
+      if (activeCols.length === 0 || rows.length === 0) {
+        setStatus('error', 'Nothing to export yet — convert first, or clear filters.');
         return;
       }
       if (typeof XLSX === 'undefined') {
@@ -755,7 +977,7 @@
         return;
       }
       const aoa = [activeCols];
-      state.rows.forEach(row => {
+      rows.forEach(row => {
         aoa.push(activeCols.map(c => (row[c] === undefined ? '' : row[c])));
       });
       const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -766,7 +988,14 @@
       const stamp = new Date().toISOString().slice(0, 10);
       const filename = (target === 'sap' ? 'sap_styles' : 'symbio_styles') + '_' + stamp + '.xlsx';
       XLSX.writeFile(wb, filename);
-      setStatus('ok', 'Downloaded ' + filename + ' (' + activeCols.length + ' columns, ' + state.rows.length + ' rows).');
+      setStatus('ok', 'Downloaded ' + filename + ' (' + activeCols.length + ' columns, ' + rows.length + ' rows).');
+    }
+
+    if (els.search) {
+      els.search.addEventListener('input', () => {
+        searchQuery = els.search.value.trim();
+        renderTable();
+      });
     }
 
     return { doConvert, doClear, doAll, doNone, doCsv, doXlsx, state };
