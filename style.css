@@ -75,7 +75,7 @@
     z-index: 20;
   }
   .topbar-inner{
-    max-width: min(2200px, 95vw);
+    max-width: min(3200px, 95vw);
     margin: 0 auto;
     display:flex;
     align-items: baseline;
@@ -122,7 +122,7 @@
   .theme-toggle:hover{ border-color: var(--text-faint); }
   #theme-toggle-icon{ font-size: 13px; line-height: 1; }
   .stage{
-    max-width: min(2200px, 98vw);
+    max-width: min(3200px, 98vw);
     margin: 0 auto;
     padding: 32px;
     display: grid;
@@ -365,6 +365,86 @@
   }
   .panel.sap thead th{ box-shadow: inset 0 -2px 0 var(--sap-dim); }
   .panel.symbio thead th{ box-shadow: inset 0 -2px 0 var(--symbio-dim); }
+
+  .th-inner{ display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .th-label{ overflow: hidden; text-overflow: ellipsis; }
+  .col-filter-btn{
+    flex: none;
+    width: 16px; height: 16px;
+    display: flex; align-items: center; justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    border-radius: 2px;
+    font-size: 10px;
+    line-height: 1;
+  }
+  .col-filter-btn:hover{ color: var(--text); background: var(--active-overlay); }
+  .col-filter-btn.active{ color: var(--validate); }
+  .col-filter-panel{
+    position: fixed;
+    z-index: 100;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    width: 220px;
+    max-height: 320px;
+    display: flex;
+    flex-direction: column;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .col-filter-search{
+    padding: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .col-filter-search input{
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 5px 8px;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .col-filter-search input:focus{ border-color: var(--validate); }
+  .col-filter-actions{
+    display: flex; flex-wrap: wrap; gap: 2px 10px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 10.5px;
+  }
+  .col-filter-actions button{
+    background: transparent;
+    border: none;
+    color: var(--validate);
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    padding: 2px 4px;
+  }
+  .col-filter-actions button:hover{ text-decoration: underline; }
+  .col-filter-list{
+    overflow-y: auto;
+    padding: 4px 0;
+    flex: 1;
+  }
+  .col-filter-item{
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px;
+    font-size: 11.5px;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .col-filter-item:hover{ background: var(--hover-overlay-strong); }
+  .col-filter-item input{ flex: none; cursor: pointer; }
+  .col-filter-item span{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .col-filter-empty{ padding: 10px; color: var(--text-faint); font-size: 11px; }
+
   tbody td{
     padding: 8px 12px;
     border-bottom: 1px solid var(--line-soft);
@@ -389,7 +469,7 @@
     letter-spacing: 0.03em;
   }
 
-  .badge-row{ display:flex; gap:8px; flex-wrap: wrap; }
+  .badge-row{ display:flex; gap:8px; align-items: left; flex-wrap: wrap; }
   .badge{
     font-family:'IBM Plex Mono', monospace;
     font-size: 10.5px;
@@ -407,7 +487,7 @@
   .badge.active{ background: var(--active-overlay); box-shadow: inset 0 0 0 1px currentColor; }
 
   /* ---- Validation section ---- */
-  .validate-stage{ max-width: min(2200px, 98vw); margin: 0 auto; padding: 0 32px 32px; }
+  .validate-stage{ max-width: min(3200px, 98vw); margin: 0 auto; padding: 0 32px 32px; }
   .swatch.validate{ background: var(--validate); box-shadow: 0 0 8px var(--validate); }
   .panel.validate thead th{ box-shadow: inset 0 -2px 0 var(--validate-dim); }
   .panel.validate textarea:focus{ border-color: var(--validate); }
@@ -418,7 +498,7 @@
   .validate-controls{ display:flex; align-items:center; gap: 12px; flex-wrap: wrap; }
   .btn-primary.validate{ background: var(--validate); color: #16101F; }
   #validate-meta{
-    display: flex;
+    display: none;
     align-items: center;
     width: fit-content;
     margin-top: 8px;
@@ -431,6 +511,7 @@
     text-transform: none;
     letter-spacing: normal;
   }
+  #validate-meta.show{ display: flex; }
   .stat-match{ color: var(--good); font-weight: 600; }
   .stat-mismatch{ color: var(--symbio); font-weight: 600; }
   .stat-missing{ color: var(--bad); font-weight: 600; }
