@@ -22,6 +22,8 @@
   let chargeStatusFilter = null; // null = show all; else 'Match' | 'Mismatch'
   let searchQuery = '';
   let searchQueryCharges = '';
+  const validateColumnFilter = createColumnFilter();
+  const chargesColumnFilter = createColumnFilter();
 
   function vSetStatus(kind, msg){
     vEls.status.className = 'status show ' + kind;
@@ -57,20 +59,36 @@
     const symStyle = symbioSpec.product.code || 'n/a';
     const sapPriceList = sapSpec.header.priceList || 'n/a';
     const symPriceList = symbioSpec.header.priceList || 'n/a';
+    const sapCatalog = sapSpec.product.catalog.code || 'n/a';
+    const symCatalog = symbioSpec.product.catalog.code || 'n/a';
 
     let text = 'Style: ' + sapStyle;
     if (normText(sapStyle) !== normText(symStyle)) text += ' (Symbio: ' + symStyle + ')';
     text += '  |  Price List: ' + sapPriceList;
     if (normText(sapPriceList) !== normText(symPriceList)) text += ' (Symbio: ' + symPriceList + ')';
+    text += '  |  Catalog: ' + sapCatalog;
+    if (normText(sapCatalog) !== normText(symCatalog)) text += ' (Symbio: ' + symCatalog + ')';
     vEls.meta.textContent = text;
+    vEls.meta.classList.add('show');
   }
 
   function renderValidationTable(allRows){
     const thead = vEls.table.querySelector('thead');
     const tbody = vEls.table.querySelector('tbody');
-    thead.innerHTML = '<tr><th>Category</th><th>Code</th><th>Name</th><th>Status</th><th>Details</th></tr>';
+    thead.innerHTML = '';
     tbody.innerHTML = '';
-    const rows = allRows.filter(matchesStatusFilter).filter(row => rowMatchesSearch(row, searchQuery));
+    const trh = document.createElement('tr');
+    trh.appendChild(buildFilterableHeaderCell('Category', 'category', () => allRows.map(r => r.category), validateColumnFilter, () => renderValidationTable(lastValidation.rows)));
+    trh.appendChild(buildFilterableHeaderCell('Code', 'code', () => allRows.map(r => r.code), validateColumnFilter, () => renderValidationTable(lastValidation.rows)));
+    const thName = document.createElement('th'); thName.textContent = 'Name'; trh.appendChild(thName);
+    const thStatus = document.createElement('th'); thStatus.textContent = 'Status'; trh.appendChild(thStatus);
+    trh.appendChild(buildFilterableHeaderCell('Details', 'details', () => allRows.map(r => r.details), validateColumnFilter, () => renderValidationTable(lastValidation.rows)));
+    thead.appendChild(trh);
+
+    const rows = allRows
+      .filter(matchesStatusFilter)
+      .filter(row => rowMatchesSearch(row, searchQuery))
+      .filter(row => validateColumnFilter.matches(row, (r, c) => filterCellValue(r[c]), ['category', 'code', 'details']));
     rows.forEach(row => {
       const tr = document.createElement('tr');
       const tdCategory = document.createElement('td'); tdCategory.textContent = row.category || '';
@@ -112,9 +130,21 @@
   function renderChargeTable(chargeRows){
     const thead = vEls.tableCharges.querySelector('thead');
     const tbody = vEls.tableCharges.querySelector('tbody');
-    thead.innerHTML = '<tr><th>Charge Code</th><th>Description</th><th>SAP</th><th>Symbio</th><th>Status</th><th>Details</th></tr>';
+    thead.innerHTML = '';
     tbody.innerHTML = '';
-    const rows = chargeRows.filter(matchesChargeStatusFilter).filter(row => rowMatchesSearch(row, searchQueryCharges));
+    const trh = document.createElement('tr');
+    trh.appendChild(buildFilterableHeaderCell('Charge Code', 'chargeCode', () => chargeRows.map(r => r.chargeCode), chargesColumnFilter, () => renderChargeTable(lastValidation.chargeRows)));
+    trh.appendChild(buildFilterableHeaderCell('Description', 'description', () => chargeRows.map(r => r.description), chargesColumnFilter, () => renderChargeTable(lastValidation.chargeRows)));
+    const thSap = document.createElement('th'); thSap.textContent = 'SAP'; trh.appendChild(thSap);
+    const thSym = document.createElement('th'); thSym.textContent = 'Symbio'; trh.appendChild(thSym);
+    const thStatus = document.createElement('th'); thStatus.textContent = 'Status'; trh.appendChild(thStatus);
+    trh.appendChild(buildFilterableHeaderCell('Details', 'details', () => chargeRows.map(r => r.details), chargesColumnFilter, () => renderChargeTable(lastValidation.chargeRows)));
+    thead.appendChild(trh);
+
+    const rows = chargeRows
+      .filter(matchesChargeStatusFilter)
+      .filter(row => rowMatchesSearch(row, searchQueryCharges))
+      .filter(row => chargesColumnFilter.matches(row, (r, c) => filterCellValue(r[c]), ['chargeCode', 'description', 'details']));
     rows.forEach(row => {
       const tr = document.createElement('tr');
       const tdCode = document.createElement('td'); tdCode.textContent = row.chargeCode;
@@ -182,6 +212,8 @@
     chargeStatusFilter = null;
     searchQuery = '';
     searchQueryCharges = '';
+    validateColumnFilter.clearAll();
+    chargesColumnFilter.clearAll();
     vEls.search.value = '';
     vEls.searchCharges.value = '';
     renderValidationMeta(sapState.spec, symbioState.spec);
@@ -206,14 +238,20 @@
     const wb = XLSX.utils.book_new();
 
     const mainHeader = ['Category', 'Code', 'Name', 'Status', 'Details'];
-    const mainRows = lastValidation.rows.filter(matchesStatusFilter);
+    const mainRows = lastValidation.rows
+      .filter(matchesStatusFilter)
+      .filter(row => rowMatchesSearch(row, searchQuery))
+      .filter(row => validateColumnFilter.matches(row, (r, c) => filterCellValue(r[c]), ['category', 'code', 'details']));
     const mainAoa = [mainHeader, ...mainRows.map(r => [r.category || '', r.code, r.name, r.status, r.details])];
     const wsMain = XLSX.utils.aoa_to_sheet(mainAoa);
     wsMain['!cols'] = [{ wch: 14 }, { wch: 22 }, { wch: 28 }, { wch: 18 }, { wch: 70 }];
     XLSX.utils.book_append_sheet(wb, wsMain, 'SAP vs Symbio');
 
     const chargeHeader = ['Charge Code', 'Description', 'SAP', 'Symbio', 'Status', 'Details'];
-    const chargeRowsOut = lastValidation.chargeRows.filter(matchesChargeStatusFilter);
+    const chargeRowsOut = lastValidation.chargeRows
+      .filter(matchesChargeStatusFilter)
+      .filter(row => rowMatchesSearch(row, searchQueryCharges))
+      .filter(row => chargesColumnFilter.matches(row, (r, c) => filterCellValue(r[c]), ['chargeCode', 'description', 'details']));
     const chargeAoa = [chargeHeader, ...chargeRowsOut.map(r => [r.chargeCode, r.description, r.sapValue, r.symbioValue, r.status, r.details])];
     const wsCharges = XLSX.utils.aoa_to_sheet(chargeAoa);
     wsCharges['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 70 }];
@@ -233,10 +271,13 @@
     chargeStatusFilter = null;
     searchQuery = '';
     searchQueryCharges = '';
+    validateColumnFilter.clearAll();
+    chargesColumnFilter.clearAll();
     vEls.search.value = '';
     vEls.searchCharges.value = '';
 
     vEls.meta.textContent = '';
+    vEls.meta.classList.remove('show');
     vEls.badges.innerHTML = '';
     vEls.table.querySelector('thead').innerHTML = '';
     vEls.table.querySelector('tbody').innerHTML = '';
