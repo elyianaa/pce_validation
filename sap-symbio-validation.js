@@ -203,7 +203,7 @@
     if (!sapHasData && !symbioHasData) {
       vSetStatus('error', 'No <Feature> elements found in either XML — nothing to validate.');
       return;
-    }
+    } 
 
     const { rows, chargeRows } = diffSpecifications(sapState.spec, symbioState.spec);
 
