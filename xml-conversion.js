@@ -358,28 +358,63 @@
         issues.push('Mode differs: SAP "' + sap.mode + '" vs Symbio "' + sym.mode + '"');
       }
 
-      const sapOptByValue = new Map(sap.options.map(o => [normText(o.value), o]));
-      const symOptByValue = new Map(sym.options.map(o => [normText(o.value), o]));
-      const missingInSymbio = sap.options.filter(o => !symOptByValue.has(normText(o.value)));
-      const extraInSymbio = sym.options.filter(o => !sapOptByValue.has(normText(o.value)));
-      const nameMismatches = [];
-      for (const [val, sapOpt] of sapOptByValue) {
-        const symOpt = symOptByValue.get(val);
-        if (symOpt && normText(symOpt.name) !== normText(sapOpt.name)) {
-          nameMismatches.push(sapOpt.value + ': "' + sapOpt.name + '" vs "' + symOpt.name + '"');
-        }
-      }
-      if (missingInSymbio.length) issues.push('Missing option(s) in Symbio: ' + missingInSymbio.map(o => o.value + ' (' + o.name + ')').join(', '));
-      if (extraInSymbio.length) issues.push('Extra option(s) in Symbio: ' + extraInSymbio.map(o => o.value + ' (' + o.name + ')').join(', '));
-      if (nameMismatches.length) issues.push('Option name mismatch: ' + nameMismatches.join('; '));
-
       rows.push({
         category: 'Feature',
         code,
         name: sap.name,
         status: issues.length ? 'Mismatch' : 'Match',
-        details: issues.length ? issues.join(' | ') : 'All fields and options match.',
+        details: issues.length ? issues.join(' | ') : 'Feature name and mode match. (See Feature Value rows for option-level detail.)',
       });
+    }
+    return rows;
+  }
+
+  function diffFeatureValues(sapFeatures, symbioFeatures){
+    // Per-option breakdown for ordinary (non-Finish) features — mirrors how
+    // Finish already produces one row per color, instead of bundling every
+    // option's match/mismatch/missing status into one aggregated Feature row.
+    const sapMap = new Map(sapFeatures.map(f => [f.code, f]));
+    const symbioMap = new Map(symbioFeatures.map(f => [f.code, f]));
+    const codes = [];
+    const seenCodes = new Set();
+    for (const f of sapFeatures) { if (!seenCodes.has(f.code)) { seenCodes.add(f.code); codes.push(f.code); } }
+    for (const f of symbioFeatures) { if (!seenCodes.has(f.code)) { seenCodes.add(f.code); codes.push(f.code); } }
+
+    const rows = [];
+    for (const code of codes) {
+      const sapFeat = sapMap.get(code);
+      const symFeat = symbioMap.get(code);
+      if (!sapFeat || !symFeat) continue; // whole-feature missing already reported by diffPlainFeatures
+
+      const sapOptMap = new Map(sapFeat.options.map(o => [normText(o.value), o]));
+      const symOptMap = new Map(symFeat.options.map(o => [normText(o.value), o]));
+      const vals = [];
+      const seenVals = new Set();
+      for (const o of sapFeat.options) { const k = normText(o.value); if (!seenVals.has(k)) { seenVals.add(k); vals.push(k); } }
+      for (const o of symFeat.options) { const k = normText(o.value); if (!seenVals.has(k)) { seenVals.add(k); vals.push(k); } }
+
+      const featureLabelTxt = code + (sapFeat.name || symFeat.name ? ' (' + (sapFeat.name || symFeat.name) + ')' : '');
+
+      for (const key of vals) {
+        const sapOpt = sapOptMap.get(key);
+        const symOpt = symOptMap.get(key);
+        if (sapOpt && !symOpt) {
+          rows.push({ category: 'Feature Value', code: sapOpt.value, name: sapOpt.name, status: 'Missing in Symbio', details: 'Value exists in SAP (feature ' + featureLabelTxt + ') but not found in Symbio.' });
+          continue;
+        }
+        if (!sapOpt && symOpt) {
+          rows.push({ category: 'Feature Value', code: symOpt.value, name: symOpt.name, status: 'Missing in SAP', details: 'Value exists in Symbio (feature ' + featureLabelTxt + ') but not in SAP.' });
+          continue;
+        }
+        const nameDiffers = !fuzzyNameMatch(sapOpt.name, symOpt.name);
+        rows.push({
+          category: 'Feature Value',
+          code: sapOpt.value,
+          name: sapOpt.name,
+          status: nameDiffers ? 'Mismatch' : 'Match',
+          details: (nameDiffers ? ('Name differs: SAP "' + sapOpt.name + '" vs Symbio "' + symOpt.name + '"') : 'Value matches.') + ' Feature: ' + featureLabelTxt + '.',
+        });
+      }
     }
     return rows;
   }
@@ -649,6 +684,7 @@
 
     const rows = [
       ...diffPlainFeatures(sapSpec.plainFeatures, symbioSpec.plainFeatures),
+      ...diffFeatureValues(sapSpec.plainFeatures, symbioSpec.plainFeatures),
       ...diffFinishGroups(sapSpec.finishGroups, symbioSpec.finishGroups),
       ...diffColorEntries(sapSpec.colorEntries, symbioSpec.colorEntries),
     ];
