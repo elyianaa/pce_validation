@@ -460,11 +460,11 @@
       const sap = sapMap.get(key);
       const sym = symbioMap.get(key);
       if (sap && !sym) {
-        rows.push({ category: 'Finish', code: sap.value, name: sap.name, status: 'Missing in Symbio', details: 'Finish/color exists in SAP (feature ' + featureLabel(sap) + ', group ' + sap.groupCode + ') but not found in Symbio.' });
+        rows.push({ category: 'Finish', code: sap.value, name: sap.name, status: 'Missing in Symbio', details: 'Finish exists in SAP (feature ' + featureLabel(sap) + ', group ' + sap.groupCode + ') but not found in Symbio.' });
         continue;
       }
       if (!sap && sym) {
-        rows.push({ category: 'Finish', code: sym.value, name: sym.name, status: 'Missing in SAP', details: 'Finish/color exists in Symbio (feature ' + featureLabel(sym) + ', group ' + sym.groupCode + ') but not in SAP.' });
+        rows.push({ category: 'Finish', code: sym.value, name: sym.name, status: 'Missing in SAP', details: 'Finish exists in Symbio (feature ' + featureLabel(sym) + ', group ' + sym.groupCode + ') but not in SAP.' });
         continue;
       }
       const issues = [];
@@ -542,14 +542,121 @@
     return rows;
   }
 
+  function diffPlainFeatureCharges(sapFeatures, symbioFeatures){
+    // Ordinary (non-Finish) features can also carry a <Charge> per option
+    // (e.g. a "Shade" selection where each option has its own upcharge).
+    // Matched by Feature.Code first, then by normalized option Value within
+    // that specific feature — only produces a row when at least one side has
+    // Charge data for that option (features/options with no pricing at all
+    // are silently skipped, same convention as diffCharges).
+    const sapMap = new Map(sapFeatures.map(f => [f.code, f]));
+    const symbioMap = new Map(symbioFeatures.map(f => [f.code, f]));
+    const codes = [];
+    const seenCodes = new Set();
+    for (const f of sapFeatures) { if (!seenCodes.has(f.code)) { seenCodes.add(f.code); codes.push(f.code); } }
+    for (const f of symbioFeatures) { if (!seenCodes.has(f.code)) { seenCodes.add(f.code); codes.push(f.code); } }
+
+    const rows = [];
+    for (const code of codes) {
+      const sapFeat = sapMap.get(code);
+      const symFeat = symbioMap.get(code);
+      if (!sapFeat || !symFeat) continue; // feature missing on one side — already reported under Features & Finishes
+
+      const sapOptMap = new Map(sapFeat.options.map(o => [normCode(o.value), o]));
+      const symOptMap = new Map(symFeat.options.map(o => [normCode(o.value), o]));
+      const vals = [];
+      const seenVals = new Set();
+      for (const o of sapFeat.options) { const k = normCode(o.value); if (!seenVals.has(k)) { seenVals.add(k); vals.push(k); } }
+      for (const o of symFeat.options) { const k = normCode(o.value); if (!seenVals.has(k)) { seenVals.add(k); vals.push(k); } }
+
+      for (const key of vals) {
+        const sapOpt = sapOptMap.get(key);
+        const symOpt = symOptMap.get(key);
+        if (!sapOpt || !symOpt) continue; // option missing on one side — already reported under Features & Finishes
+
+        const sapCharge = sapOpt.charge || null;
+        const symCharge = symOpt.charge || null;
+        if (!sapCharge && !symCharge) continue;
+
+        const chargeCode = chargeGroupId(sapCharge) || chargeGroupId(symCharge) || sapOpt.value;
+        const description = sapOpt.name || symOpt.name || '';
+
+        const issues = [];
+        const notes = [];
+        if (!sapCharge) issues.push('No upcharge on SAP side');
+        if (!symCharge) issues.push('No upcharge on Symbio side');
+        if (sapCharge && symCharge) {
+          if (normText(chargeGroupId(sapCharge)) !== normText(chargeGroupId(symCharge))) notes.push('Charge group label differs: SAP "' + (chargeGroupId(sapCharge) || 'n/a') + '" vs Symbio "' + (chargeGroupId(symCharge) || 'n/a') + '"');
+          if (amountsDiffer(sapCharge.base, symCharge.base)) issues.push('Base differs: SAP ' + fmtAmt(sapCharge.base) + ' vs Symbio ' + fmtAmt(symCharge.base));
+          if (amountsDiffer(sapCharge.total, symCharge.total)) issues.push('Total differs: SAP ' + fmtAmt(sapCharge.total) + ' vs Symbio ' + fmtAmt(symCharge.total));
+        }
+
+        const allNotes = [...issues, ...notes];
+        rows.push({
+          chargeCode: chargeCode,
+          description: description,
+          sapValue: formatCharge(sapCharge),
+          symbioValue: formatCharge(symCharge),
+          status: issues.length ? 'Mismatch' : 'Match',
+          details: 'Feature ' + code + ' (' + (sapFeat.name || symFeat.name || '') + ') option ' + sapOpt.value + ' (' + description + ').' + (allNotes.length ? ' ' + allNotes.join('; ') + '.' : ''),
+        });
+      }
+    }
+    return rows;
+  }
+
+  function reconcileAmbiguousFinishFeatures(sapSpec, symbioSpec){
+    // A <Feature> with no <Mode> tag falls into plainFeatures by default. If the
+    // SAME Feature.Code is explicitly classified as Finish on the OTHER side,
+    // treat this side's version as Finish too — otherwise its options would be
+    // compared under the wrong category (Feature vs Finish) and never match,
+    // even though the underlying data (and any upcharge) is genuinely present.
+    function finishCodesOf(spec){
+      return new Set(spec.colorEntries.map(c => c.sourceFeatureCode).filter(Boolean));
+    }
+    const sapFinishCodes = finishCodesOf(sapSpec);
+    const symbioFinishCodes = finishCodesOf(symbioSpec);
+
+    function reclassify(spec, otherFinishCodes){
+      const stillPlain = [];
+      spec.plainFeatures.forEach(pf => {
+        if (otherFinishCodes.has(pf.code)) {
+          pf.options.forEach(o => {
+            spec.colorEntries.push({
+              groupCode: pf.code,
+              value: o.value,
+              name: o.name,
+              sourceFeatureCode: pf.code,
+              sourceFeatureName: pf.name,
+              charge: o.charge || null,
+              effectiveCharge: o.charge || null,
+              hasExplicitGroup: false,
+            });
+          });
+        } else {
+          stillPlain.push(pf);
+        }
+      });
+      spec.plainFeatures = stillPlain;
+    }
+
+    reclassify(sapSpec, symbioFinishCodes);
+    reclassify(symbioSpec, sapFinishCodes);
+  }
+
   function diffSpecifications(sapSpec, symbioSpec){
+    reconcileAmbiguousFinishFeatures(sapSpec, symbioSpec);
+
     const rows = [
       ...diffPlainFeatures(sapSpec.plainFeatures, symbioSpec.plainFeatures),
       ...diffFinishGroups(sapSpec.finishGroups, symbioSpec.finishGroups),
       ...diffColorEntries(sapSpec.colorEntries, symbioSpec.colorEntries),
     ];
 
-    const chargeRows = diffCharges(sapSpec.colorEntries, symbioSpec.colorEntries);
+    const chargeRows = [
+      ...diffCharges(sapSpec.colorEntries, symbioSpec.colorEntries),
+      ...diffPlainFeatureCharges(sapSpec.plainFeatures, symbioSpec.plainFeatures),
+    ];
 
     // List Price comparison now lives in the Upcharges tab too — same shape as chargeRows.
     if (sapSpec.product.effectiveListPrice !== undefined || symbioSpec.product.effectiveListPrice !== undefined) {
