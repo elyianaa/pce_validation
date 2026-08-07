@@ -510,7 +510,7 @@
     font-size: 13px;
     text-transform: none;
     letter-spacing: normal;
-  }
+  } 
   #validate-meta.show{ display: flex; }
   .stat-match{ color: var(--good); font-weight: 600; }
   .stat-mismatch{ color: var(--symbio); font-weight: 600; }
