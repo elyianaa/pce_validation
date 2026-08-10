@@ -1,4 +1,4 @@
-  // ---------- SAP vs Symbio validation runner ----------
+// ---------- SAP vs Symbio validation runner ----------
 
   const vEls = {
     status: document.getElementById('status-validate'),
@@ -91,14 +91,14 @@
       .filter(row => validateColumnFilter.matches(row, (r, c) => filterCellValue(r[c]), ['category', 'code', 'details']));
     rows.forEach(row => {
       const tr = document.createElement('tr');
-      const tdCategory = document.createElement('td'); tdCategory.textContent = row.category || '';
-      const tdCode = document.createElement('td'); tdCode.textContent = row.code;
-      const tdName = document.createElement('td'); tdName.textContent = row.name;
+      const tdCategory = document.createElement('td'); renderHighlighted(tdCategory, row.category || '', searchQuery);
+      const tdCode = document.createElement('td'); renderHighlighted(tdCode, row.code, searchQuery);
+      const tdName = document.createElement('td'); renderHighlighted(tdName, row.name, searchQuery);
       const tdStatus = document.createElement('td');
       tdStatus.textContent = row.status;
       tdStatus.className = statusClass(row.status);
       const tdDetails = document.createElement('td');
-      tdDetails.textContent = row.details;
+      renderHighlighted(tdDetails, row.details, searchQuery);
       tdDetails.className = 'details-cell';
       tr.appendChild(tdCategory); tr.appendChild(tdCode); tr.appendChild(tdName); tr.appendChild(tdStatus); tr.appendChild(tdDetails);
       tbody.appendChild(tr);
@@ -147,15 +147,15 @@
       .filter(row => chargesColumnFilter.matches(row, (r, c) => filterCellValue(r[c]), ['chargeCode', 'description', 'details']));
     rows.forEach(row => {
       const tr = document.createElement('tr');
-      const tdCode = document.createElement('td'); tdCode.textContent = row.chargeCode;
-      const tdDesc = document.createElement('td'); tdDesc.textContent = row.description;
-      const tdSap = document.createElement('td'); tdSap.textContent = row.sapValue;
-      const tdSym = document.createElement('td'); tdSym.textContent = row.symbioValue;
+      const tdCode = document.createElement('td'); renderHighlighted(tdCode, row.chargeCode, searchQueryCharges);
+      const tdDesc = document.createElement('td'); renderHighlighted(tdDesc, row.description, searchQueryCharges);
+      const tdSap = document.createElement('td'); renderHighlighted(tdSap, row.sapValue, searchQueryCharges);
+      const tdSym = document.createElement('td'); renderHighlighted(tdSym, row.symbioValue, searchQueryCharges);
       const tdStatus = document.createElement('td');
       tdStatus.textContent = row.status;
       tdStatus.className = statusClass(row.status);
       const tdDetails = document.createElement('td');
-      tdDetails.textContent = row.details;
+      renderHighlighted(tdDetails, row.details, searchQueryCharges);
       tdDetails.className = 'details-cell';
       tr.appendChild(tdCode); tr.appendChild(tdDesc); tr.appendChild(tdSap); tr.appendChild(tdSym); tr.appendChild(tdStatus); tr.appendChild(tdDetails);
       tbody.appendChild(tr);
@@ -203,7 +203,7 @@
     if (!sapHasData && !symbioHasData) {
       vSetStatus('error', 'No <Feature> elements found in either XML — nothing to validate.');
       return;
-    } 
+    }
 
     const { rows, chargeRows } = diffSpecifications(sapState.spec, symbioState.spec);
 
@@ -317,101 +317,3 @@
       document.querySelectorAll('[data-controls-panel]').forEach(c => { c.style.display = (c.getAttribute('data-controls-panel') === tab) ? '' : 'none'; });
     });
   });
-
-  // ---------- Table zoom controls ----------
-
-  const zoomLevels = { sap: 1, symbio: 1, validate: 1, 'validate-charges': 1 };
-  const ZOOM_MIN = 0.6;
-  const ZOOM_MAX = 2.0;
-  const ZOOM_STEP = 0.1;
-
-  function applyZoom(target){
-    const table = document.getElementById('table-' + target);
-    const levelEl = document.getElementById('zoom-level-' + target);
-    if (!table) return;
-    table.style.zoom = zoomLevels[target];
-    if (levelEl) levelEl.textContent = Math.round(zoomLevels[target] * 100) + '%';
-  }
-
-  document.querySelectorAll('[data-zoom-action]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const action = btn.getAttribute('data-zoom-action');
-      const target = btn.getAttribute('data-zoom-target');
-      if (!target || zoomLevels[target] === undefined) return;
-      let level = zoomLevels[target] + (action === 'in' ? ZOOM_STEP : -ZOOM_STEP);
-      level = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, level));
-      zoomLevels[target] = Math.round(level * 100) / 100;
-      applyZoom(target);
-    });
-  });
-
-  // ---------- Display Columns collapse toggle ----------
-
-  document.querySelectorAll('[data-cols-collapse]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const target = btn.getAttribute('data-cols-collapse');
-      const box = document.getElementById('cols-' + target);
-      if (!box) return;
-      const collapsed = box.classList.toggle('collapsed');
-      btn.textContent = collapsed ? '+' : '−';
-    });
-  });
-
-  // ---------- Table collapse (hide/show) ----------
-
-  document.querySelectorAll('[data-table-collapse]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const target = btn.getAttribute('data-table-collapse');
-      const wrap = document.getElementById('table-wrap-' + target);
-      if (!wrap) return;
-      const nowHidden = wrap.style.display === 'none';
-      wrap.style.display = nowHidden ? '' : 'none';
-      btn.textContent = nowHidden ? 'Hide table' : 'Show table';
-    });
-  });
-
-  // ---------- Light / dark theme toggle ----------
-
-  const themeBtn = document.getElementById('theme-toggle');
-  const themeIcon = document.getElementById('theme-toggle-icon');
-  const themeLabel = document.getElementById('theme-toggle-label');
-
-  function applyThemeUI(theme){
-    if (themeIcon) themeIcon.innerHTML = theme === 'light' ? '&#9788;' : '&#9789;';
-    if (themeLabel) themeLabel.textContent = theme === 'light' ? 'Light' : 'Dark';
-  }
-
-  // Sync button label with whatever the pre-body script already applied (avoids flash).
-  applyThemeUI(document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
-
-  if (themeBtn) {
-    themeBtn.addEventListener('click', () => {
-      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-      const next = isLight ? 'dark' : 'light';
-      if (next === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-      } else {
-        document.documentElement.removeAttribute('data-theme');
-      }
-      applyThemeUI(next);
-      try { localStorage.setItem('pce-theme', next); } catch (e) { /* storage unavailable — theme just won't persist */ }
-    });
-  }
-
-  // ---------- Hide/show both conversion panels (SAP + Symbio) at once ----------
-
-  const panelsToggleBtn = document.getElementById('panels-toggle');
-  const panelsToggleIcon = document.getElementById('panels-toggle-icon');
-  const panelsToggleLabel = document.getElementById('panels-toggle-label');
-  const panelBodySap = document.getElementById('panel-body-sap');
-  const panelBodySymbio = document.getElementById('panel-body-symbio');
-
-  if (panelsToggleBtn && panelBodySap && panelBodySymbio) {
-    panelsToggleBtn.addEventListener('click', () => {
-      const nowHidden = panelBodySap.style.display !== 'none';
-      panelBodySap.style.display = nowHidden ? 'none' : '';
-      panelBodySymbio.style.display = nowHidden ? 'none' : '';
-      panelsToggleIcon.innerHTML = nowHidden ? '&#43;' : '&#8722;';
-      panelsToggleLabel.textContent = nowHidden ? 'Show Panels' : 'Hide Panels';
-    });
-  }
