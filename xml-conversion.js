@@ -572,9 +572,36 @@
         symbioValue: formatCharge(symCharge),
         status: issues.length ? 'Mismatch' : 'Match',
         details: 'Finish ' + sap.value + ' (' + description + ') — Feature: SAP ' + featureLabel(sap) + ' | Symbio ' + featureLabel(sym) + '.' + (allNotes.length ? ' ' + allNotes.join('; ') + '.' : ''),
+        groupCode: sap.groupCode || sym.groupCode || '',
       });
     }
     return rows;
+  }
+
+  function annotateSuspectedRuleComputedFamilies(chargeRows){
+    // Pattern seen repeatedly across real style pairs: an entire finish
+    // family shows NO pricing on the SAP side at all, while Symbio has real
+    // values for nearly every color in that family. Verified (via live PCE
+    // UI) that SAP's true price often DOES match Symbio in these cases — the
+    // static "View PCE XML" export simply doesn't capture rule-computed
+    // pricing. Flag this distinctly so it isn't mistaken for a genuine
+    // pricing discrepancy on first read.
+    const byGroup = new Map();
+    chargeRows.forEach(r => {
+      if (!r.groupCode) return;
+      if (!byGroup.has(r.groupCode)) byGroup.set(r.groupCode, []);
+      byGroup.get(r.groupCode).push(r);
+    });
+    byGroup.forEach((groupRows, groupCode) => {
+      if (groupRows.length < 3) return; // too small to call it a systemic pattern
+      const sapMissingCount = groupRows.filter(r => r.sapValue === 'n/a').length;
+      const symbioPresentCount = groupRows.filter(r => r.symbioValue !== 'n/a').length;
+      if (sapMissingCount === groupRows.length && symbioPresentCount >= Math.ceil(groupRows.length * 0.8)) {
+        groupRows.forEach(r => {
+          r.details += ' \u26A0 Likely rule-computed pricing: SAP shows no price for any of the ' + groupRows.length + ' color(s) in this family, while Symbio has data for ' + symbioPresentCount + ' — SAP\'s static XML export may not capture rule-based pricing here. Verify the live PCE UI before treating this as a real gap.';
+        });
+      }
+    });
   }
 
   function diffPlainFeatureCharges(sapFeatures, symbioFeatures){
@@ -693,6 +720,7 @@
       ...diffCharges(sapSpec.colorEntries, symbioSpec.colorEntries),
       ...diffPlainFeatureCharges(sapSpec.plainFeatures, symbioSpec.plainFeatures),
     ];
+    annotateSuspectedRuleComputedFamilies(chargeRows);
 
     // List Price comparison now lives in the Upcharges tab too — same shape as chargeRows.
     if (sapSpec.product.effectiveListPrice !== undefined || symbioSpec.product.effectiveListPrice !== undefined) {
@@ -726,6 +754,34 @@
   // ---------- Panel controller ----------
 
   // ---------- Generic Excel-style column filter (reused across all tables) ----------
+
+  // ---------- Search-match highlighting (shared across all tables) ----------
+
+  function renderHighlighted(td, text, query){
+    const str = (text === undefined || text === null) ? '' : String(text);
+    if (!query) {
+      td.textContent = str;
+      return;
+    }
+    const lowerText = str.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    if (!lowerQuery || lowerText.indexOf(lowerQuery) === -1) {
+      td.textContent = str;
+      return;
+    }
+    td.textContent = '';
+    let pos = 0;
+    let idx;
+    while ((idx = lowerText.indexOf(lowerQuery, pos)) !== -1) {
+      if (idx > pos) td.appendChild(document.createTextNode(str.slice(pos, idx)));
+      const mark = document.createElement('mark');
+      mark.className = 'search-highlight';
+      mark.textContent = str.slice(idx, idx + lowerQuery.length);
+      td.appendChild(mark);
+      pos = idx + lowerQuery.length;
+    }
+    if (pos < str.length) td.appendChild(document.createTextNode(str.slice(pos)));
+  }
 
   function filterCellValue(v){
     return (v === undefined || v === null || v === '') ? '(blank)' : String(v);
@@ -992,7 +1048,7 @@
             td.textContent = '—';
             td.classList.add('empty-cell');
           } else {
-            td.textContent = val;
+            renderHighlighted(td, val, searchQuery);
             td.title = val;
           }
           tr.appendChild(td);
@@ -1162,3 +1218,46 @@
       if (action === 'xlsx') controllers[target].doXlsx();
     });
   });
+
+  // ---------- Display Columns collapse toggle ----------
+
+  document.querySelectorAll('[data-cols-collapse]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-cols-collapse');
+      const box = document.getElementById('cols-' + target);
+      if (!box) return;
+      const collapsed = box.classList.toggle('collapsed');
+      btn.textContent = collapsed ? '+' : '−';
+    });
+  });
+
+  // ---------- Table collapse (hide/show) ----------
+
+  document.querySelectorAll('[data-table-collapse]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-table-collapse');
+      const wrap = document.getElementById('table-wrap-' + target);
+      if (!wrap) return;
+      const nowHidden = wrap.style.display === 'none';
+      wrap.style.display = nowHidden ? '' : 'none';
+      btn.textContent = nowHidden ? 'Hide table' : 'Show table';
+    });
+  });
+
+  // ---------- Hide/show both conversion panels (SAP + Symbio) at once ----------
+
+  const panelsToggleBtn = document.getElementById('panels-toggle');
+  const panelsToggleIcon = document.getElementById('panels-toggle-icon');
+  const panelsToggleLabel = document.getElementById('panels-toggle-label');
+  const panelBodySap = document.getElementById('panel-body-sap');
+  const panelBodySymbio = document.getElementById('panel-body-symbio');
+
+  if (panelsToggleBtn && panelBodySap && panelBodySymbio) {
+    panelsToggleBtn.addEventListener('click', () => {
+      const nowHidden = panelBodySap.style.display !== 'none';
+      panelBodySap.style.display = nowHidden ? 'none' : '';
+      panelBodySymbio.style.display = nowHidden ? 'none' : '';
+      panelsToggleIcon.innerHTML = nowHidden ? '&#43;' : '&#8722;';
+      panelsToggleLabel.textContent = nowHidden ? 'Show Panels' : 'Hide Panels';
+    });
+  }
