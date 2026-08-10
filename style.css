@@ -457,6 +457,13 @@
   }
   tbody tr:hover td{ background: var(--hover-overlay); }
   .empty-cell{ color: var(--text-faint); }
+  mark.search-highlight{
+    background: rgba(242, 169, 60, 0.55);
+    color: #1B1200;
+    padding: 0 1px;
+    border-radius: 2px;
+    font-weight: 600;
+  }
 
   .placeholder{
     border: 1px dashed var(--line);
@@ -510,7 +517,7 @@
     font-size: 13px;
     text-transform: none;
     letter-spacing: normal;
-  } 
+  }
   #validate-meta.show{ display: flex; }
   .stat-match{ color: var(--good); font-weight: 600; }
   .stat-mismatch{ color: var(--symbio); font-weight: 600; }
