@@ -297,6 +297,7 @@
       } else if (modeNorm === 'finish') {
         const fvl = Array.from(f.children).find(c => c.tagName === 'FeatureValueList');
         const rawOptions = fvl ? Array.from(fvl.children).filter(c => c.tagName === 'FeatureValue') : [];
+        const finishGroupFeatureCode = childText(f, 'FinishGroupFeatureCode') || '';
         rawOptions.forEach(fv => {
           const value = childText(fv, 'Value') || '';
           const cname = childText(fv, 'Name') || '';
@@ -305,7 +306,7 @@
           const explicitGroup = childText(fv, 'FinishGroupFeatureValueCode');
           const groupCode = explicitGroup || code || '';
           const charge = parseCharge(fv);
-          colorEntries.push({ groupCode, value, name: cname, sourceFeatureCode: code || '', sourceFeatureName: name || '', charge, hasExplicitGroup: !!explicitGroup });
+          colorEntries.push({ groupCode, value, name: cname, sourceFeatureCode: code || '', sourceFeatureName: name || '', charge, hasExplicitGroup: !!explicitGroup, containerCode: finishGroupFeatureCode });
         });
       } else if (code) {
         plainFeatures.push({ code, name, mode, required: f.getAttribute('Required') || '', options: parseOptions(f) });
@@ -316,13 +317,18 @@
     // (family) level, not per individual color — the color is expected to
     // inherit its family's price. Build that fallback so comparisons don't
     // falsely flag "no upcharge" when the family-level charge is actually
-    // present and matches.
+    // present and matches. Keyed by family value + its own FinishGroup
+    // container code — the same family code (e.g. "WDGRNHPL") can be
+    // declared under multiple, unrelated FinishGroup containers on the same
+    // style (Case Finish Group vs Headset Finish Group), each with its own
+    // price, so container scoping avoids one silently overwriting the other.
     const familyChargeMap = new Map();
     finishGroups.forEach(g => g.options.forEach(o => {
-      if (o.charge) familyChargeMap.set(normCode(o.value), o.charge);
+      if (o.charge) familyChargeMap.set(normCode(o.value) + '||' + normCode(o.containerCode || ''), o.charge);
     }));
     colorEntries.forEach(entry => {
-      entry.effectiveCharge = entry.charge || familyChargeMap.get(normCode(entry.groupCode)) || null;
+      const scopedKey = normCode(entry.groupCode) + '||' + normCode(entry.containerCode || '');
+      entry.effectiveCharge = entry.charge || familyChargeMap.get(scopedKey) || null;
     });
 
     return { product, header, plainFeatures, finishGroups, colorEntries };
@@ -472,6 +478,16 @@
     return entry.sourceFeatureCode + (entry.sourceFeatureName ? ' ' + entry.sourceFeatureName : '');
   }
 
+  function colorEntryKey(c){
+    // The same finish/color code can legitimately appear under multiple,
+    // unrelated Finish features on the same style (e.g. "2406 Clear Cherry"
+    // offered under both "Headset Finish" and "Case Finish"). Keying only by
+    // normalized Value would collapse these into one Map entry, silently
+    // dropping every occurrence but the last. Scoping by source Feature.Code
+    // too keeps each feature's instance as its own comparison unit.
+    return normCode(c.value) + '||' + normCode(c.sourceFeatureCode || '');
+  }
+
   function fmtAmt(v){
     return v === undefined ? 'n/a' : v.toFixed(2);
   }
@@ -483,12 +499,12 @@
   }
 
   function diffColorEntries(sapColors, symbioColors){
-    const sapMap = new Map(sapColors.map(c => [normCode(c.value), c]));
-    const symbioMap = new Map(symbioColors.map(c => [normCode(c.value), c]));
+    const sapMap = new Map(sapColors.map(c => [colorEntryKey(c), c]));
+    const symbioMap = new Map(symbioColors.map(c => [colorEntryKey(c), c]));
     const allKeys = [];
     const seen = new Set();
-    for (const c of sapColors) { const k = normCode(c.value); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
-    for (const c of symbioColors) { const k = normCode(c.value); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
+    for (const c of sapColors) { const k = colorEntryKey(c); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
+    for (const c of symbioColors) { const k = colorEntryKey(c); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
 
     const rows = [];
     for (const key of allKeys) {
@@ -532,12 +548,12 @@
   function diffCharges(sapColors, symbioColors){
     // Separate table for the Upcharges tab: Charge Code | Description | SAP | Symbio | Status | Details.
     // Only produced for finishes that exist on both sides AND have a <Charge> block on at least one side.
-    const sapMap = new Map(sapColors.map(c => [normCode(c.value), c]));
-    const symbioMap = new Map(symbioColors.map(c => [normCode(c.value), c]));
+    const sapMap = new Map(sapColors.map(c => [colorEntryKey(c), c]));
+    const symbioMap = new Map(symbioColors.map(c => [colorEntryKey(c), c]));
     const allKeys = [];
     const seen = new Set();
-    for (const c of sapColors) { const k = normCode(c.value); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
-    for (const c of symbioColors) { const k = normCode(c.value); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
+    for (const c of sapColors) { const k = colorEntryKey(c); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
+    for (const c of symbioColors) { const k = colorEntryKey(c); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
 
     const rows = [];
     for (const key of allKeys) {
@@ -572,36 +588,9 @@
         symbioValue: formatCharge(symCharge),
         status: issues.length ? 'Mismatch' : 'Match',
         details: 'Finish ' + sap.value + ' (' + description + ') — Feature: SAP ' + featureLabel(sap) + ' | Symbio ' + featureLabel(sym) + '.' + (allNotes.length ? ' ' + allNotes.join('; ') + '.' : ''),
-        groupCode: sap.groupCode || sym.groupCode || '',
       });
     }
     return rows;
-  }
-
-  function annotateSuspectedRuleComputedFamilies(chargeRows){
-    // Pattern seen repeatedly across real style pairs: an entire finish
-    // family shows NO pricing on the SAP side at all, while Symbio has real
-    // values for nearly every color in that family. Verified (via live PCE
-    // UI) that SAP's true price often DOES match Symbio in these cases — the
-    // static "View PCE XML" export simply doesn't capture rule-computed
-    // pricing. Flag this distinctly so it isn't mistaken for a genuine
-    // pricing discrepancy on first read.
-    const byGroup = new Map();
-    chargeRows.forEach(r => {
-      if (!r.groupCode) return;
-      if (!byGroup.has(r.groupCode)) byGroup.set(r.groupCode, []);
-      byGroup.get(r.groupCode).push(r);
-    });
-    byGroup.forEach((groupRows, groupCode) => {
-      if (groupRows.length < 3) return; // too small to call it a systemic pattern
-      const sapMissingCount = groupRows.filter(r => r.sapValue === 'n/a').length;
-      const symbioPresentCount = groupRows.filter(r => r.symbioValue !== 'n/a').length;
-      if (sapMissingCount === groupRows.length && symbioPresentCount >= Math.ceil(groupRows.length * 0.8)) {
-        groupRows.forEach(r => {
-          r.details += ' \u26A0 Likely rule-computed pricing: SAP shows no price for any of the ' + groupRows.length + ' color(s) in this family, while Symbio has data for ' + symbioPresentCount + ' — SAP\'s static XML export may not capture rule-based pricing here. Verify the live PCE UI before treating this as a real gap.';
-        });
-      }
-    });
   }
 
   function diffPlainFeatureCharges(sapFeatures, symbioFeatures){
@@ -706,21 +695,34 @@
     reclassify(symbioSpec, sapFinishCodes);
   }
 
+  // Feature codes matching these prefixes are special/metadata-only fields
+  // that are never meant to be validated (e.g. internal spec bookkeeping
+  // fields like S_SPEC_FIN_VENDOR_NAME) — excluded entirely before diffing,
+  // not just hidden after the fact, so they don't skew the compared/missing
+  // counts either.
+  const EXCLUDED_FEATURE_CODE_PREFIXES = ['S_SPEC_FIN_'];
+  function isExcludedFeatureCode(code){
+    const c = (code || '').toUpperCase();
+    return EXCLUDED_FEATURE_CODE_PREFIXES.some(p => c.startsWith(p));
+  }
+
   function diffSpecifications(sapSpec, symbioSpec){
     reconcileAmbiguousFinishFeatures(sapSpec, symbioSpec);
 
+    const sapPlain = sapSpec.plainFeatures.filter(f => !isExcludedFeatureCode(f.code));
+    const symbioPlain = symbioSpec.plainFeatures.filter(f => !isExcludedFeatureCode(f.code));
+
     const rows = [
-      ...diffPlainFeatures(sapSpec.plainFeatures, symbioSpec.plainFeatures),
-      ...diffFeatureValues(sapSpec.plainFeatures, symbioSpec.plainFeatures),
+      ...diffPlainFeatures(sapPlain, symbioPlain),
+      ...diffFeatureValues(sapPlain, symbioPlain),
       ...diffFinishGroups(sapSpec.finishGroups, symbioSpec.finishGroups),
       ...diffColorEntries(sapSpec.colorEntries, symbioSpec.colorEntries),
     ];
 
     const chargeRows = [
       ...diffCharges(sapSpec.colorEntries, symbioSpec.colorEntries),
-      ...diffPlainFeatureCharges(sapSpec.plainFeatures, symbioSpec.plainFeatures),
+      ...diffPlainFeatureCharges(sapPlain, symbioPlain),
     ];
-    annotateSuspectedRuleComputedFamilies(chargeRows);
 
     // List Price comparison now lives in the Upcharges tab too — same shape as chargeRows.
     if (sapSpec.product.effectiveListPrice !== undefined || symbioSpec.product.effectiveListPrice !== undefined) {
