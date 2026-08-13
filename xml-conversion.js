@@ -326,9 +326,27 @@
     finishGroups.forEach(g => g.options.forEach(o => {
       if (o.charge) familyChargeMap.set(normCode(o.value) + '||' + normCode(o.containerCode || ''), o.charge);
     }));
+    // But only fall back to the family price when NO color in that family
+    // has its own explicit <Charge> anywhere in this document. If even one
+    // color specifies its own charge, that proves this export DOES encode
+    // charges per-color when applicable — so a sibling color with no charge
+    // in that same family genuinely has none (e.g. a free/no-upcharge
+    // option), rather than having simply omitted a value to inherit.
+    const familiesWithAnyOwnColorCharge = new Set();
+    colorEntries.forEach(entry => {
+      if (entry.charge) {
+        familiesWithAnyOwnColorCharge.add(normCode(entry.groupCode) + '||' + normCode(entry.containerCode || ''));
+      }
+    });
     colorEntries.forEach(entry => {
       const scopedKey = normCode(entry.groupCode) + '||' + normCode(entry.containerCode || '');
-      entry.effectiveCharge = entry.charge || familyChargeMap.get(scopedKey) || null;
+      if (entry.charge) {
+        entry.effectiveCharge = entry.charge;
+      } else if (!familiesWithAnyOwnColorCharge.has(scopedKey)) {
+        entry.effectiveCharge = familyChargeMap.get(scopedKey) || null;
+      } else {
+        entry.effectiveCharge = null;
+      }
     });
 
     return { product, header, plainFeatures, finishGroups, colorEntries };
