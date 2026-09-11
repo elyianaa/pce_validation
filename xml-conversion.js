@@ -516,18 +516,61 @@
     return Math.abs(a - b) > 0.001; // float-precision safety only, not a business tolerance
   }
 
-  function diffColorEntries(sapColors, symbioColors){
+  function pairColorEntries(sapColors, symbioColors){
     const sapMap = new Map(sapColors.map(c => [colorEntryKey(c), c]));
     const symbioMap = new Map(symbioColors.map(c => [colorEntryKey(c), c]));
-    const allKeys = [];
-    const seen = new Set();
-    for (const c of sapColors) { const k = colorEntryKey(c); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
-    for (const c of symbioColors) { const k = colorEntryKey(c); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
 
-    const rows = [];
+    const allKeys = [];
+    const seenKeys = new Set();
+    for (const c of sapColors) { const k = colorEntryKey(c); if (!seenKeys.has(k)) { seenKeys.add(k); allKeys.push(k); } }
+    for (const c of symbioColors) { const k = colorEntryKey(c); if (!seenKeys.has(k)) { seenKeys.add(k); allKeys.push(k); } }
+
+    // Index Symbio keys left unmatched after the exact pass, by normalized Value.
+    const symbioLeftoverByValue = new Map();
+    allKeys.forEach(k => {
+      if (symbioMap.has(k) && !sapMap.has(k)) {
+        const vk = normCode(symbioMap.get(k).value);
+        if (!symbioLeftoverByValue.has(vk)) symbioLeftoverByValue.set(vk, []);
+        symbioLeftoverByValue.get(vk).push(k);
+      }
+    });
+    // Greedily pair each unmatched SAP key with an unmatched Symbio key of
+    // the same Value (one-to-one — a value used more than once on the
+    // leftover side pairs in encounter order, extras stay unmatched).
+    const fallbackPairs = new Map(); // sapKey -> symbioKey
+    const usedSymbioFallbackKeys = new Set();
+    allKeys.forEach(k => {
+      if (sapMap.has(k) && !symbioMap.has(k)) {
+        const vk = normCode(sapMap.get(k).value);
+        const candidates = symbioLeftoverByValue.get(vk) || [];
+        const symKey = candidates.find(sk => !usedSymbioFallbackKeys.has(sk));
+        if (symKey) {
+          fallbackPairs.set(k, symKey);
+          usedSymbioFallbackKeys.add(symKey);
+        }
+      }
+    });
+
+    const pairs = [];
+    const handledSymbioKeys = new Set();
     for (const key of allKeys) {
-      const sap = sapMap.get(key);
-      const sym = symbioMap.get(key);
+      if (handledSymbioKeys.has(key)) continue; // already emitted via another key's fallback pairing
+      const sap = sapMap.get(key) || null;
+      let sym = symbioMap.get(key) || null;
+      if (!sym && fallbackPairs.has(key)) {
+        const symKey = fallbackPairs.get(key);
+        sym = symbioMap.get(symKey);
+        handledSymbioKeys.add(symKey);
+      }
+      pairs.push({ sap, sym });
+    }
+    return pairs;
+  }
+
+  function diffColorEntries(sapColors, symbioColors){
+    const pairs = pairColorEntries(sapColors, symbioColors);
+    const rows = [];
+    for (const { sap, sym } of pairs) {
       if (sap && !sym) {
         rows.push({ category: 'Finish', code: sap.value, name: sap.name, status: 'Missing in Symbio', details: 'Finish exists in SAP (feature ' + featureLabel(sap) + ', group ' + sap.groupCode + ') but not found in Symbio.' });
         continue;
@@ -566,17 +609,10 @@
   function diffCharges(sapColors, symbioColors){
     // Separate table for the Upcharges tab: Charge Code | Description | SAP | Symbio | Status | Details.
     // Only produced for finishes that exist on both sides AND have a <Charge> block on at least one side.
-    const sapMap = new Map(sapColors.map(c => [colorEntryKey(c), c]));
-    const symbioMap = new Map(symbioColors.map(c => [colorEntryKey(c), c]));
-    const allKeys = [];
-    const seen = new Set();
-    for (const c of sapColors) { const k = colorEntryKey(c); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
-    for (const c of symbioColors) { const k = colorEntryKey(c); if (!seen.has(k)) { seen.add(k); allKeys.push(k); } }
+    const pairs = pairColorEntries(sapColors, symbioColors);
 
     const rows = [];
-    for (const key of allKeys) {
-      const sap = sapMap.get(key);
-      const sym = symbioMap.get(key);
+    for (const { sap, sym } of pairs) {
       if (!sap || !sym) continue;
       const sapCharge = sap.effectiveCharge || null;
       const symCharge = sym.effectiveCharge || null;
