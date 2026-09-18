@@ -186,12 +186,19 @@
   function collectAllFeatures(root){
     // Every <Feature> anywhere in the document, regardless of nesting depth —
     // handles both SAP's nested-per-group style and Symbio's flat style.
+    // Features explicitly marked Visible="false" are hidden from the live
+    // PCE configurator and excluded entirely here (not just plain metadata
+    // fields like S_SPEC_FIN_* — a hidden Finish/FinishGroup feature is
+    // excluded the same way).
     const out = [];
     const stack = [root];
     while (stack.length) {
       const el = stack.pop();
       for (const child of Array.from(el.children)) {
-        if (child.tagName === 'Feature') out.push(child);
+        if (child.tagName === 'Feature') {
+          const visibleAttr = (child.getAttribute('Visible') || '').trim().toLowerCase();
+          if (visibleAttr !== 'false') out.push(child);
+        }
         stack.push(child);
       }
     }
@@ -219,6 +226,19 @@
     // and the readable name in Description. Prefer whichever looks readable.
     if (!charge) return undefined;
     return charge.description || charge.code;
+  }
+
+  function isBasePriceComponentLabel(label){
+    // Charges whose group label starts with "BASEUP" (e.g. BASEUPVEND2930W6,
+    // BASEUPCMPVEND2930W6, BASEUPENDPNL) represent a contribution baked into
+    // the product's base/list price — not a discretionary premium for
+    // choosing a nicer finish. Compared the same way as any other charge,
+    // but labeled separately so it isn't mistaken for an optional upcharge.
+    return /^BASEUP/i.test((label || '').trim());
+  }
+
+  function chargeCategory(chargeCodeLabel){
+    return isBasePriceComponentLabel(chargeCodeLabel) ? 'Base Price Component' : 'Upcharge';
   }
 
   function parseSpecification(xmlString){
@@ -636,6 +656,7 @@
 
       const allNotes = [...issues, ...notes];
       rows.push({
+        category: chargeCategory(chargeCode),
         chargeCode: chargeCode,
         description: description,
         sapValue: formatCharge(sapCharge),
@@ -698,6 +719,7 @@
 
         const allNotes = [...issues, ...notes];
         rows.push({
+          category: chargeCategory(chargeCode),
           chargeCode: chargeCode,
           description: description,
           sapValue: formatCharge(sapCharge),
@@ -795,6 +817,7 @@
         details = 'Base/list price differs by ' + Math.abs(sapPrice - symPrice).toFixed(2) + '.' + sourceNote;
       }
       chargeRows.unshift({
+        category: 'Base Price Component',
         chargeCode: 'LIST_PRICE',
         description: 'Base/List Price',
         sapValue: sapPrice !== undefined ? sapPrice.toFixed(2) : 'n/a',
